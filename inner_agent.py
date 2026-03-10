@@ -10,6 +10,7 @@ Cet agent reçoit un program.md comme instructions et :
 """
 
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -157,11 +158,10 @@ IMPORTANT SETUP NOTES:
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
 - Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
 
-WINDOWS ENVIRONMENT — CRITICAL:
-- Flash Attention 3 (FA3 / the 'kernels' package) is NOT available on Windows. Do NOT import or use it.
-- Use torch.nn.functional.scaled_dot_product_attention() for ALL attention operations.
-- If train.py imports 'kernels', you MUST replace that attention with F.scaled_dot_product_attention before running.
-- Standard PyTorch SDPA supports causal masks and works fine on Windows with CUDA.
+WINDOWS ENVIRONMENT — train.py is already patched for Windows:
+- FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).
+- torch.compile disabled (Triton not available on Windows) — do NOT re-enable it.
+- DEVICE_BATCH_SIZE=4, TOTAL_BATCH_SIZE=2**13 (tuned for 6GB VRAM) — adjust only if you get OOM.
 
 === YOUR RESEARCH INSTRUCTIONS (program.md) ===
 {program_content}
@@ -183,12 +183,22 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
         iteration += 1
         print(f"  [inner_agent] API call #{iteration}...", end=" ", flush=True)
 
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            tools=TOOLS,
-            messages=messages,
-        )
+        for _attempt in range(5):
+            try:
+                response = client.messages.create(
+                    model=MODEL,
+                    max_tokens=MAX_TOKENS,
+                    tools=TOOLS,
+                    messages=messages,
+                )
+                break
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    wait = 60 * (_attempt + 1)
+                    print(f"\n  [inner_agent] Rate limit hit — waiting {wait}s...")
+                    time.sleep(wait)
+                else:
+                    raise
 
         print(f"stop={response.stop_reason}")
 
