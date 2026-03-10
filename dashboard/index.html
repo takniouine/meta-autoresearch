@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>meta-autoresearch</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* =========================================================
+       Design system — dark ML research theme
+       ========================================================= */
+    :root {
+      --bg:           #0d1117;
+      --bg-card:      #161b22;
+      --bg-hover:     #1c2128;
+      --border:       #30363d;
+      --text:         #e6edf3;
+      --text-muted:   #8b949e;
+      --blue:         #58a6ff;
+      --green:        #3fb950;
+      --red:          #f85149;
+      --yellow:       #d29922;
+      --purple:       #bc8cff;
+      --font-mono:    'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      --font-sans:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* =========================================================
+       Header
+       ========================================================= */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .logo span { color: var(--blue); }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px 10px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .status-dot.running  { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    .status-dot.idle     { background: var(--text-muted); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .refresh-countdown { color: var(--blue); }
+
+    /* =========================================================
+       Main layout
+       ========================================================= */
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .goal-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .goal-bar .label { color: var(--text-muted); margin-right: 8px; }
+    .goal-bar .value { color: var(--purple); }
+
+    /* =========================================================
+       Stats row
+       ========================================================= */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stat-card .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    .stat-card .stat-value {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+
+    .stat-card .stat-value.highlight { color: var(--blue); }
+    .stat-card .stat-value.good      { color: var(--green); }
+    .stat-card .stat-value.warn      { color: var(--yellow); }
+
+    .stat-card .stat-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* =========================================================
+       Chart card
+       ========================================================= */
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 16px;
+    }
+
+    .chart-container { position: relative; height: 240px; }
+
+    /* =========================================================
+       Two-column grid
+       ========================================================= */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .data-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    /* =========================================================
+       Tables
+       ========================================================= */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 500;
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td      { background: var(--bg-hover); }
+
+    /* Status badges */
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .badge-keep    { background: rgba(63, 185, 80, 0.15);  color: var(--green);  border: 1px solid rgba(63, 185, 80, 0.3); }
+    .badge-discard { background: rgba(210, 153, 34, 0.15); color: var(--yellow); border: 1px solid rgba(210, 153, 34, 0.3); }
+    .badge-crash   { background: rgba(248, 81, 73, 0.15);  color: var(--red);    border: 1px solid rgba(248, 81, 73, 0.3); }
+    .badge-best    { background: rgba(88, 166, 255, 0.15); color: var(--blue);   border: 1px solid rgba(88, 166, 255, 0.3); }
+
+    /* =========================================================
+       Programs list
+       ========================================================= */
+    .program-item {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .program-item:hover  { background: var(--bg-hover); }
+    .program-item:last-child { margin-bottom: 0; }
+
+    .program-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .program-version {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--blue);
+    }
+
+    .program-score {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .program-preview {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* =========================================================
+       Empty states
+       ========================================================= */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .empty-state code {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      margin-top: 8px;
+      color: var(--blue);
+    }
+
+    /* =========================================================
+       Responsive
+       ========================================================= */
+    @media (max-width: 900px) {
+      .stats-row  { grid-template-columns: repeat(3, 1fr); }
+      .grid-2     { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .stats-row  { grid-template-columns: repeat(2, 1fr); }
+      main        { padding: 12px; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ================================================================
+     HEADER
+     ================================================================ -->
+<header>
+  <div class="header-left">
+    <div class="logo">meta<span>-autoresearch</span></div>
+    <div class="status-badge">
+      <div class="status-dot idle" id="statusDot"></div>
+      <span id="statusText">Loading...</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <span>Last update: <span id="lastUpdate">—</span></span>
+    <span>Refresh in <span class="refresh-countdown" id="countdown">15</span>s</span>
+  </div>
+</header>
+
+<!-- ================================================================
+     MAIN
+     ================================================================ -->
+<main>
+
+  <!-- Goal bar -->
+  <div class="goal-bar">
+    <span class="label">goal</span>
+    <span class="value" id="goalText">—</span>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Best val_bpb</div>
+      <div class="stat-value highlight" id="statBestBpb">—</div>
+      <div class="stat-sub">lower is better</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Batches done</div>
+      <div class="stat-value" id="statBatches">—</div>
+      <div class="stat-sub" id="statBatchesSub">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Experiments</div>
+      <div class="stat-value" id="statExperiments">—</div>
+      <div class="stat-sub">total runs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Programs tested</div>
+      <div class="stat-value" id="statPrograms">—</div>
+      <div class="stat-sub">program.md versions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Crash rate</div>
+      <div class="stat-value" id="statCrashRate">—</div>
+      <div class="stat-sub">% of experiments</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-card">
+    <div class="card-title">val_bpb progression</div>
+    <div class="chart-container">
+      <canvas id="bpbChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Two-column grid -->
+  <div class="grid-2">
+
+    <!-- Recent experiments -->
+    <div class="data-card">
+      <div class="card-title">Recent experiments</div>
+      <div id="experimentsContainer">
+        <div class="empty-state">
+          No experiments yet.
+          <code>uv run run_meta.py --goal "..."</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Program versions -->
+    <div class="data-card">
+      <div class="card-title">Program versions</div>
+      <div id="programsContainer">
+        <div class="empty-state">
+          No programs generated yet.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ================================================================
+     JAVASCRIPT
+     ================================================================ -->
+<script>
+  // ----------------------------------------------------------------
+  // Chart.js setup
+  // ----------------------------------------------------------------
+  const ctx = document.getElementById("bpbChart").getContext("2d");
+
+  const bpbChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "best val_bpb",
+          data: [],
+          borderColor: "#58a6ff",
+          backgroundColor: "rgba(88, 166, 255, 0.08)",
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: "#58a6ff",
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: "all experiments",
+          data: [],
+          borderColor: "rgba(139, 148, 158, 0.3)",
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          pointRadius: 2,
+          pointBackgroundColor: "rgba(139, 148, 158, 0.5)",
+          tension: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: {
+          labels: { color: "#8b949e", font: { size: 11 }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: "#161b22",
+          borderColor: "#30363d",
+          borderWidth: 1,
+          titleColor: "#e6edf3",
+          bodyColor: "#8b949e",
+          callbacks: {
+            label: ctx => ` val_bpb: ${ctx.parsed.y.toFixed(6)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid:    { color: "rgba(48,54,61,0.5)" },
+          ticks:   { color: "#8b949e", font: { size: 11 } },
+          title:   { display: true, text: "batch", color: "#8b949e", font: { size: 11 } }
+        },
+        y: {
+          grid:    { color: "rgba(48,54,61,0.5)" },
+          ticks:   { color: "#8b949e", font: { size: 11, family: "monospace" } },
+          title:   { display: true, text: "val_bpb", color: "#8b949e", font: { size: 11 } }
+        }
+      }
+    }
+  });
+
+  // ----------------------------------------------------------------
+  // Data fetching and rendering
+  // ----------------------------------------------------------------
+  async function fetchAndRender() {
+    try {
+      const [statusRes, historyRes, programsRes] = await Promise.all([
+        fetch("/api/status"),
+        fetch("/api/history"),
+        fetch("/api/programs"),
+      ]);
+      const status   = await statusRes.json();
+      const history  = await historyRes.json();
+      const programs = await programsRes.json();
+
+      renderStatus(status);
+      renderChart(history);
+      renderExperiments(history);
+      renderPrograms(programs);
+
+      document.getElementById("lastUpdate").textContent =
+        new Date().toLocaleTimeString();
+
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
+  }
+
+  function renderStatus(status) {
+    // Status badge
+    const dot  = document.getElementById("statusDot");
+    const text = document.getElementById("statusText");
+    if (status.running) {
+      dot.className  = "status-dot running";
+      text.textContent = `Running — Batch ${status.batches_done + 1}`;
+    } else {
+      dot.className  = "status-dot idle";
+      text.textContent = status.batches_done > 0 ? "Idle" : "Not started";
+    }
+
+    // Goal
+    document.getElementById("goalText").textContent = status.goal || "—";
+
+    // Stats
+    document.getElementById("statBestBpb").textContent =
+      status.best_val_bpb ? status.best_val_bpb.toFixed(6) : "—";
+    document.getElementById("statBatches").textContent =
+      status.batches_done || "0";
+    document.getElementById("statBatchesSub").textContent =
+      `of ${50} max`;
+    document.getElementById("statExperiments").textContent =
+      status.total_experiments || "0";
+    document.getElementById("statPrograms").textContent =
+      status.total_programs || "0";
+
+    const cr = status.crash_rate_pct || 0;
+    const crEl = document.getElementById("statCrashRate");
+    crEl.textContent = cr + "%";
+    crEl.className = "stat-value " + (cr > 20 ? "warn" : cr > 0 ? "" : "good");
+  }
+
+  function renderChart(history) {
+    const results = history.results || [];
+    if (!results.length) return;
+
+    // Batch labels + best val_bpb per batch
+    const labels  = results.map(r => `B${r.batch_id}`);
+    const bestBpb = results.map(r => r.summary?.best_val_bpb ?? null);
+
+    // All individual experiments (flattened)
+    const allPoints = [];
+    results.forEach(r => {
+      r.experiments?.forEach((e, i) => {
+        if (e.status !== "crash") {
+          allPoints.push({ x: `B${r.batch_id}`, y: e.val_bpb });
+        }
+      });
+    });
+
+    bpbChart.data.labels                  = labels;
+    bpbChart.data.datasets[0].data        = bestBpb;
+    bpbChart.data.datasets[1].data        = allPoints;
+    bpbChart.update();
+  }
+
+  function renderExperiments(history) {
+    const results = history.results || [];
+    const allExps = [];
+    results.forEach(r => {
+      r.experiments?.forEach(e => {
+        allExps.push({ ...e, batch_id: r.batch_id });
+      });
+    });
+
+    if (!allExps.length) return;
+
+    // Show last 15 experiments, most recent first
+    const recent = allExps.slice(-15).reverse();
+
+    const bestBpb = Math.min(...allExps.filter(e => e.status !== "crash").map(e => e.val_bpb));
+
+    const html = `
+      <table>
+        <thead>
+          <tr>
+            <th>B</th><th>Commit</th><th>val_bpb</th><th>Status</th><th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${recent.map(e => {
+            const isBest = e.val_bpb === bestBpb && e.status !== "crash";
+            const bpb    = e.status === "crash" ? "—" : e.val_bpb.toFixed(6);
+            const badge  = isBest
+              ? `<span class="badge badge-best">★ best</span>`
+              : `<span class="badge badge-${e.status}">${e.status}</span>`;
+            return `<tr>
+              <td>${e.batch_id}</td>
+              <td>${e.commit?.slice(0,7) || "—"}</td>
+              <td>${bpb}</td>
+              <td>${badge}</td>
+              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8b949e">${e.description || "—"}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>`;
+
+    document.getElementById("experimentsContainer").innerHTML = html;
+  }
+
+  function renderPrograms(programs) {
+    if (!programs.length) return;
+
+    const bestScore = Math.min(...programs.filter(p => p.score != null).map(p => p.score));
+    const sorted    = [...programs].sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+
+    const html = sorted.map(p => {
+      const isBest = p.score === bestScore && p.score != null;
+      return `
+        <div class="program-item">
+          <div class="program-header">
+            <span class="program-version">v${String(p.version).padStart(3,"0")}</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              ${isBest ? '<span class="badge badge-best">★ best</span>' : ""}
+              <span class="program-score">
+                ${p.score != null ? "score " + p.score.toFixed(4) : "no data"}
+              </span>
+            </div>
+          </div>
+          <div class="program-preview">${p.preview || "—"}</div>
+        </div>`;
+    }).join("");
+
+    document.getElementById("programsContainer").innerHTML = html;
+  }
+
+  // ----------------------------------------------------------------
+  // Auto-refresh countdown
+  // ----------------------------------------------------------------
+  const REFRESH_INTERVAL = 15; // secondes
+  let countdown = REFRESH_INTERVAL;
+
+  function tick() {
+    countdown--;
+    document.getElementById("countdown").textContent = countdown;
+    if (countdown <= 0) {
+      countdown = REFRESH_INTERVAL;
+      fetchAndRender();
+    }
+  }
+
+  // Initial fetch + start countdown
+  fetchAndRender();
+  setInterval(tick, 1000);
+</script>
+
+</body>
+</html>
