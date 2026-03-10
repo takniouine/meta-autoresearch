@@ -1,0 +1,17 @@
+# =============================================================================
+# meta-autoresearch — Configuration
+# =============================================================================
+
+# Nombre d'expériences par batch (chacune ~5 minutes)
+# 5 expériences = ~25 minutes par batch (test)
+# 10 expériences = ~50 minutes par batch (production)
+n_experiments: 5
+
+# Nombre maximum de batches avant arrêt automatique
+max_batches: 50
+
+# Arrêt anticipé si pas de progrès pendant N batches consécutifs
+convergence_threshold: 3
+
+# Modèle Anthropic utilisé pour le meta-agent ET l'inner agent
+model: "claude-sonnet-4-6"
