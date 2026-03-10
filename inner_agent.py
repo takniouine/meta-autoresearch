@@ -157,6 +157,12 @@ IMPORTANT SETUP NOTES:
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
 - Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
 
+WINDOWS ENVIRONMENT — CRITICAL:
+- Flash Attention 3 (FA3 / the 'kernels' package) is NOT available on Windows. Do NOT import or use it.
+- Use torch.nn.functional.scaled_dot_product_attention() for ALL attention operations.
+- If train.py imports 'kernels', you MUST replace that attention with F.scaled_dot_product_attention before running.
+- Standard PyTorch SDPA supports causal masks and works fine on Windows with CUDA.
+
 === YOUR RESEARCH INSTRUCTIONS (program.md) ===
 {program_content}
 === END INSTRUCTIONS ===
@@ -199,6 +205,26 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
             print("  [inner_agent] Agent signaled end_turn — done.")
             break
 
+        if response.stop_reason == "max_tokens":
+            # La réponse a été tronquée. Si elle contient des tool_use incomplets,
+            # on doit fournir des tool_result vides pour garder la conversation valide.
+            print("  [inner_agent] Warning: max_tokens hit — recovering...")
+            incomplete = [b for b in response.content if b.type == "tool_use"]
+            if incomplete:
+                tool_results = [
+                    {
+                        "type":        "tool_result",
+                        "tool_use_id": b.id,
+                        "content":     "Response was truncated. Please continue from where you left off.",
+                    }
+                    for b in incomplete
+                ]
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                # Pas de tool_use : on relance juste avec une invite de continuation
+                messages.append({"role": "user", "content": "Continue."})
+            continue
+
         if response.stop_reason == "tool_use":
             tool_results = []
             for block in response.content:
@@ -207,7 +233,7 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
                     result = execute_tool(block.name, block.input)
                     tool_results.append({
                         "type":        "tool_result",
-                        "tool_use_id": block.id,   # Référence obligatoire à l'appel d'outil
+                        "tool_use_id": block.id,
                         "content":     result,
                     })
             # Renvoie les résultats à Claude pour qu'il continue son raisonnement
