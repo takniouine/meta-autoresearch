@@ -21,6 +21,7 @@
       --red:          #f85149;
       --yellow:       #d29922;
       --purple:       #bc8cff;
+      --orange:       #f0883e;
       --font-mono:    'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
       --font-sans:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     }
@@ -37,11 +38,24 @@
     }
 
     /* =========================================================
+       Error banner
+       ========================================================= */
+    #errorBanner {
+      display: none;
+      background: rgba(248, 81, 73, 0.12);
+      border-bottom: 1px solid rgba(248, 81, 73, 0.4);
+      padding: 8px 24px;
+      font-size: 12px;
+      color: var(--red);
+      font-family: var(--font-mono);
+    }
+
+    /* =========================================================
        Header
        ========================================================= */
     header {
       border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
+      padding: 12px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -64,7 +78,6 @@
       color: var(--text);
       letter-spacing: -0.3px;
     }
-
     .logo span { color: var(--blue); }
 
     .status-badge {
@@ -79,18 +92,23 @@
     }
 
     .status-dot {
-      width: 7px;
-      height: 7px;
+      width: 7px; height: 7px;
       border-radius: 50%;
       background: var(--text-muted);
     }
+    .status-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    .status-dot.idle    { background: var(--text-muted); }
 
-    .status-dot.running  { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
-    .status-dot.idle     { background: var(--text-muted); }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
+    .model-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--purple);
+      background: rgba(188, 140, 255, 0.1);
+      border: 1px solid rgba(188, 140, 255, 0.25);
+      border-radius: 4px;
+      padding: 2px 8px;
     }
 
     .header-right {
@@ -101,7 +119,12 @@
       color: var(--text-muted);
       font-family: var(--font-mono);
     }
-
+    .header-right a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .header-right a:hover { color: var(--blue); }
     .refresh-countdown { color: var(--blue); }
 
     /* =========================================================
@@ -110,64 +133,83 @@
     main {
       max-width: 1280px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 20px 24px;
     }
 
+    /* Goal bar */
     .goal-bar {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 20px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-family: var(--font-mono);
       font-size: 13px;
     }
-
-    .goal-bar .label { color: var(--text-muted); margin-right: 8px; }
-    .goal-bar .value { color: var(--purple); }
+    .goal-bar .label { color: var(--text-muted); }
+    .goal-bar .value { color: var(--purple); flex: 1; }
+    .goal-bar .elapsed { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 
     /* =========================================================
        Stats row
        ========================================================= */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
     }
 
     .stat-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
+      padding: 14px 16px;
     }
 
     .stat-card .stat-label {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.6px;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
 
     .stat-card .stat-value {
       font-family: var(--font-mono);
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 600;
       color: var(--text);
       letter-spacing: -0.5px;
     }
-
     .stat-card .stat-value.highlight { color: var(--blue); }
     .stat-card .stat-value.good      { color: var(--green); }
     .stat-card .stat-value.warn      { color: var(--yellow); }
 
     .stat-card .stat-sub {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 3px;
     }
+
+    /* Progress bar for convergence */
+    .progress-bar-wrap {
+      margin-top: 6px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--yellow);
+      transition: width 0.4s ease;
+    }
+    .progress-bar-fill.green { background: var(--green); }
 
     /* =========================================================
        Chart card
@@ -177,26 +219,86 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 20px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .card-title {
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.6px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
-    .chart-container { position: relative; height: 240px; }
+    .chart-container { position: relative; height: 220px; }
+
+    /* =========================================================
+       Analysis panel
+       ========================================================= */
+    .analysis-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .analysis-panel.visible { display: block; }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .analysis-section h4 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .analysis-section p {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .analysis-section ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .analysis-section ul li {
+      font-size: 12px;
+      color: var(--text);
+      padding: 2px 0;
+      padding-left: 14px;
+      position: relative;
+      line-height: 1.4;
+    }
+
+    .analysis-section ul li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--text-muted);
+    }
+
+    .analysis-section.next li::before { color: var(--blue); content: "▸"; }
+    .analysis-section.success li::before { color: var(--green); content: "✓"; }
+    .analysis-section.failed li::before { color: var(--red); content: "✗"; }
 
     /* =========================================================
        Two-column grid
        ========================================================= */
     .grid-2 {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 3fr 2fr;
       gap: 16px;
     }
 
@@ -213,43 +315,53 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12px;
     }
 
     th {
       color: var(--text-muted);
       font-weight: 500;
       text-align: left;
-      padding: 8px 10px;
+      padding: 7px 10px;
       border-bottom: 1px solid var(--border);
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      white-space: nowrap;
     }
 
     td {
-      padding: 9px 10px;
+      padding: 8px 10px;
       border-bottom: 1px solid rgba(48, 54, 61, 0.5);
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
     }
 
     tr:last-child td { border-bottom: none; }
     tr:hover td      { background: var(--bg-hover); }
 
-    /* Status badges */
+    @keyframes flash-in {
+      from { background: rgba(63, 185, 80, 0.15); }
+      to   { background: transparent; }
+    }
+    .row-new td { animation: flash-in 2s ease forwards; }
+
+    /* Badges */
     .badge {
       display: inline-block;
       border-radius: 4px;
-      padding: 2px 7px;
-      font-size: 11px;
+      padding: 2px 6px;
+      font-size: 10px;
       font-weight: 500;
     }
-
     .badge-keep    { background: rgba(63, 185, 80, 0.15);  color: var(--green);  border: 1px solid rgba(63, 185, 80, 0.3); }
     .badge-discard { background: rgba(210, 153, 34, 0.15); color: var(--yellow); border: 1px solid rgba(210, 153, 34, 0.3); }
     .badge-crash   { background: rgba(248, 81, 73, 0.15);  color: var(--red);    border: 1px solid rgba(248, 81, 73, 0.3); }
     .badge-best    { background: rgba(88, 166, 255, 0.15); color: var(--blue);   border: 1px solid rgba(88, 166, 255, 0.3); }
+    .badge-live    { background: rgba(63, 185, 80, 0.1);   color: var(--green);  border: 1px solid rgba(63, 185, 80, 0.2); font-size: 9px; }
+
+    .improv-pos { color: var(--green); }
+    .improv-neg { color: var(--red); }
 
     /* =========================================================
        Programs list
@@ -259,10 +371,9 @@
       border: 1px solid var(--border);
       border-radius: 6px;
       margin-bottom: 8px;
-      cursor: pointer;
+      cursor: default;
       transition: background 0.15s;
     }
-
     .program-item:hover  { background: var(--bg-hover); }
     .program-item:last-child { margin-bottom: 0; }
 
@@ -282,7 +393,7 @@
 
     .program-score {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
     }
 
@@ -299,35 +410,41 @@
        ========================================================= */
     .empty-state {
       text-align: center;
-      padding: 40px 20px;
+      padding: 32px 20px;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 12px;
     }
-
     .empty-state code {
       display: block;
       font-family: var(--font-mono);
-      font-size: 12px;
-      margin-top: 8px;
+      font-size: 11px;
+      margin-top: 6px;
       color: var(--blue);
     }
 
     /* =========================================================
        Responsive
        ========================================================= */
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
       .stats-row  { grid-template-columns: repeat(3, 1fr); }
-      .grid-2     { grid-template-columns: 1fr; }
+      .analysis-grid { grid-template-columns: 1fr 1fr; }
     }
-
+    @media (max-width: 900px) {
+      .grid-2     { grid-template-columns: 1fr; }
+      .stats-row  { grid-template-columns: repeat(3, 1fr); }
+    }
     @media (max-width: 600px) {
       .stats-row  { grid-template-columns: repeat(2, 1fr); }
+      .analysis-grid { grid-template-columns: 1fr; }
       main        { padding: 12px; }
     }
   </style>
 </head>
 
 <body>
+
+<!-- Error banner -->
+<div id="errorBanner">⚠ Connection lost — dashboard/api.py may not be running</div>
 
 <!-- ================================================================
      HEADER
@@ -339,10 +456,13 @@
       <div class="status-dot idle" id="statusDot"></div>
       <span id="statusText">Loading...</span>
     </div>
+    <div class="model-badge" id="modelBadge">—</div>
   </div>
   <div class="header-right">
-    <span>Last update: <span id="lastUpdate">—</span></span>
-    <span>Refresh in <span class="refresh-countdown" id="countdown">15</span>s</span>
+    <span>elapsed: <span id="elapsedTime">—</span></span>
+    <span>updated <span id="lastUpdate">—</span></span>
+    <span>refresh in <span class="refresh-countdown" id="countdown">15</span>s</span>
+    <a href="https://github.com/takniouine/meta-autoresearch" target="_blank">GitHub ↗</a>
   </div>
 </header>
 
@@ -355,51 +475,89 @@
   <div class="goal-bar">
     <span class="label">goal</span>
     <span class="value" id="goalText">—</span>
+    <span class="elapsed" id="startedAt">—</span>
   </div>
 
   <!-- Stats row -->
   <div class="stats-row">
+
     <div class="stat-card">
       <div class="stat-label">Best val_bpb</div>
       <div class="stat-value highlight" id="statBestBpb">—</div>
-      <div class="stat-sub">lower is better</div>
+      <div class="stat-sub" id="statBestImprov">lower is better</div>
     </div>
+
     <div class="stat-card">
       <div class="stat-label">Batches done</div>
-      <div class="stat-value" id="statBatches">—</div>
-      <div class="stat-sub" id="statBatchesSub">—</div>
+      <div class="stat-value" id="statBatches">0</div>
+      <div class="stat-sub" id="statBatchesSub">of — max</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill green" id="batchProgress" style="width:0%"></div>
+      </div>
     </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Convergence</div>
+      <div class="stat-value" id="statConvergence">0 / —</div>
+      <div class="stat-sub">batches without improvement</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="convergenceProgress" style="width:0%"></div>
+      </div>
+    </div>
+
     <div class="stat-card">
       <div class="stat-label">Experiments</div>
-      <div class="stat-value" id="statExperiments">—</div>
+      <div class="stat-value" id="statExperiments">0</div>
       <div class="stat-sub">total runs</div>
     </div>
+
     <div class="stat-card">
       <div class="stat-label">Programs tested</div>
-      <div class="stat-value" id="statPrograms">—</div>
+      <div class="stat-value" id="statPrograms">0</div>
       <div class="stat-sub">program.md versions</div>
     </div>
+
     <div class="stat-card">
       <div class="stat-label">Crash rate</div>
       <div class="stat-value" id="statCrashRate">—</div>
       <div class="stat-sub">% of experiments</div>
     </div>
+
   </div>
 
   <!-- Chart -->
   <div class="chart-card">
-    <div class="card-title">val_bpb progression</div>
+    <div class="card-title">val_bpb progression — lower is better</div>
     <div class="chart-container">
       <canvas id="bpbChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Meta-agent analysis -->
+  <div class="analysis-panel" id="analysisPanel">
+    <div class="card-title">Meta-agent analysis — latest research direction</div>
+    <div class="analysis-grid">
+      <div class="analysis-section">
+        <h4>Observations</h4>
+        <p id="analysisObs">—</p>
+      </div>
+      <div class="analysis-section success">
+        <h4>What worked</h4>
+        <ul id="analysisSuccess"></ul>
+      </div>
+      <div class="analysis-section next">
+        <h4>Next directions</h4>
+        <ul id="analysisNext"></ul>
+      </div>
     </div>
   </div>
 
   <!-- Two-column grid -->
   <div class="grid-2">
 
-    <!-- Recent experiments -->
+    <!-- Experiments table -->
     <div class="data-card">
-      <div class="card-title">Recent experiments</div>
+      <div class="card-title">Recent experiments <span id="expCount" style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0"></span></div>
       <div id="experimentsContainer">
         <div class="empty-state">
           No experiments yet.
@@ -412,9 +570,7 @@
     <div class="data-card">
       <div class="card-title">Program versions</div>
       <div id="programsContainer">
-        <div class="empty-state">
-          No programs generated yet.
-        </div>
+        <div class="empty-state">No programs generated yet.</div>
       </div>
     </div>
 
@@ -436,27 +592,43 @@
       labels: [],
       datasets: [
         {
-          label: "best val_bpb",
+          label: "best val_bpb per batch",
           data: [],
           borderColor: "#58a6ff",
-          backgroundColor: "rgba(88, 166, 255, 0.08)",
+          backgroundColor: "rgba(88, 166, 255, 0.07)",
           borderWidth: 2,
-          pointRadius: 4,
+          pointRadius: 5,
           pointBackgroundColor: "#58a6ff",
-          pointHoverRadius: 6,
+          pointHoverRadius: 7,
           tension: 0.3,
           fill: true,
+          order: 1,
         },
         {
           label: "all experiments",
           data: [],
-          borderColor: "rgba(139, 148, 158, 0.3)",
+          borderColor: "transparent",
           backgroundColor: "transparent",
-          borderWidth: 1,
-          pointRadius: 2,
-          pointBackgroundColor: "rgba(139, 148, 158, 0.5)",
+          borderWidth: 0,
+          pointRadius: 3,
+          pointBackgroundColor: "rgba(139, 148, 158, 0.4)",
+          pointHoverRadius: 5,
           tension: 0,
           fill: false,
+          order: 2,
+          type: "scatter",
+        },
+        {
+          label: "baseline",
+          data: [],
+          borderColor: "rgba(240, 136, 62, 0.5)",
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
+          order: 3,
         }
       ]
     },
@@ -466,7 +638,7 @@
       animation: { duration: 400 },
       plugins: {
         legend: {
-          labels: { color: "#8b949e", font: { size: 11 }, boxWidth: 12 }
+          labels: { color: "#8b949e", font: { size: 11 }, boxWidth: 12, padding: 16 }
         },
         tooltip: {
           backgroundColor: "#161b22",
@@ -475,24 +647,51 @@
           titleColor: "#e6edf3",
           bodyColor: "#8b949e",
           callbacks: {
-            label: ctx => ` val_bpb: ${ctx.parsed.y.toFixed(6)}`
+            label: ctx => {
+              if (ctx.dataset.label === "baseline") return null;
+              const y = ctx.parsed?.y ?? ctx.raw?.y;
+              return y != null ? ` val_bpb: ${y.toFixed(6)}` : null;
+            }
           }
         }
       },
       scales: {
         x: {
-          grid:    { color: "rgba(48,54,61,0.5)" },
-          ticks:   { color: "#8b949e", font: { size: 11 } },
-          title:   { display: true, text: "batch", color: "#8b949e", font: { size: 11 } }
+          grid:  { color: "rgba(48,54,61,0.5)" },
+          ticks: { color: "#8b949e", font: { size: 11 } },
+          title: { display: true, text: "batch", color: "#8b949e", font: { size: 11 } }
         },
         y: {
-          grid:    { color: "rgba(48,54,61,0.5)" },
-          ticks:   { color: "#8b949e", font: { size: 11, family: "monospace" } },
-          title:   { display: true, text: "val_bpb", color: "#8b949e", font: { size: 11 } }
+          grid:  { color: "rgba(48,54,61,0.5)" },
+          ticks: { color: "#8b949e", font: { size: 11, family: "monospace" } },
+          title: { display: true, text: "val_bpb", color: "#8b949e", font: { size: 11 } }
         }
       }
     }
   });
+
+  // ----------------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------------
+  function elapsed(isoStr) {
+    if (!isoStr) return "—";
+    const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+    if (diff < 60)   return `${diff}s`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ${diff%60}s`;
+    const h = Math.floor(diff/3600), m = Math.floor((diff%3600)/60);
+    return `${h}h ${m}m`;
+  }
+
+  function improv(current, baseline) {
+    if (current == null || baseline == null || baseline === 0) return "";
+    const pct = ((baseline - current) / baseline * 100);
+    if (Math.abs(pct) < 0.01) return "";
+    const sign = pct > 0 ? "↓" : "↑";
+    const cls  = pct > 0 ? "improv-pos" : "improv-neg";
+    return `<span class="${cls}" style="font-size:10px;margin-left:4px">${sign}${Math.abs(pct).toFixed(2)}%</span>`;
+  }
+
+  let _prevLiveCount = 0;
 
   // ----------------------------------------------------------------
   // Data fetching and rendering
@@ -508,75 +707,160 @@
       const history  = await historyRes.json();
       const programs = await programsRes.json();
 
+      document.getElementById("errorBanner").style.display = "none";
+
       renderStatus(status);
-      renderChart(history);
+      renderChart(history, status);
       renderExperiments(history, status);
       renderPrograms(programs);
+      renderAnalysis(status.last_analysis);
 
       document.getElementById("lastUpdate").textContent =
         new Date().toLocaleTimeString();
+      document.getElementById("elapsedTime").textContent =
+        elapsed(status.started_at);
 
     } catch (err) {
+      document.getElementById("errorBanner").style.display = "block";
       console.error("Fetch error:", err);
     }
   }
 
   function renderStatus(status) {
-    // Status badge
+    // Header badge
     const dot  = document.getElementById("statusDot");
     const text = document.getElementById("statusText");
+    const liveCount = (status.live_experiments || []).length;
+
     if (status.running) {
-      dot.className  = "status-dot running";
-      text.textContent = `Running — Batch ${status.batches_done + 1}`;
+      dot.className    = "status-dot running";
+      const batchLabel = `Batch ${(status.batches_done || 0) + 1}`;
+      text.textContent = liveCount > 0
+        ? `Running — ${batchLabel} (${liveCount} live)`
+        : `Running — ${batchLabel}`;
     } else {
-      dot.className  = "status-dot idle";
-      text.textContent = status.batches_done > 0 ? "Idle" : "Not started";
+      dot.className    = "status-dot idle";
+      text.textContent = (status.batches_done || 0) > 0 ? "Idle" : "Not started";
     }
 
-    // Goal
-    document.getElementById("goalText").textContent = status.goal || "—";
+    document.getElementById("modelBadge").textContent = status.model || "—";
+    document.getElementById("goalText").textContent   = status.goal || "—";
+    document.getElementById("startedAt").textContent  =
+      status.started_at ? `started ${new Date(status.started_at).toLocaleString()}` : "";
 
-    // Stats
-    document.getElementById("statBestBpb").textContent =
-      status.best_val_bpb ? status.best_val_bpb.toFixed(6) : "—";
-    document.getElementById("statBatches").textContent =
-      status.batches_done || "0";
-    document.getElementById("statBatchesSub").textContent =
-      `of ${status.max_batches || 50} max`;
-    const liveCount = (status.live_experiments || []).length;
-    const totalExp  = (status.total_experiments || 0) + liveCount;
+    // Best val_bpb + improvement from first batch
+    const bestBpb    = status.best_val_bpb;
+    const bestEl     = document.getElementById("statBestBpb");
+    const improvEl   = document.getElementById("statBestImprov");
+    bestEl.textContent = bestBpb ? bestBpb.toFixed(6) : "—";
+
+    // Batches
+    const batches    = status.batches_done || 0;
+    const maxBatches = status.max_batches  || 50;
+    document.getElementById("statBatches").textContent    = batches;
+    document.getElementById("statBatchesSub").textContent = `of ${maxBatches} max`;
+    document.getElementById("batchProgress").style.width  =
+      `${Math.min(batches / maxBatches * 100, 100)}%`;
+
+    // Convergence
+    const noImp    = status.no_improvement_count || 0;
+    const threshold = 3; // shown from config ideally — fallback 3
+    document.getElementById("statConvergence").textContent = `${noImp} / ${threshold}`;
+    const convPct = Math.min(noImp / threshold * 100, 100);
+    const convBar = document.getElementById("convergenceProgress");
+    convBar.style.width = `${convPct}%`;
+    convBar.className   = `progress-bar-fill${convPct >= 66 ? "" : " green"}`;
+    if (convPct >= 100) convBar.style.background = "var(--red)";
+
+    // Experiments
+    const totalExp = (status.total_experiments || 0) + liveCount;
     document.getElementById("statExperiments").textContent = totalExp || "0";
-    document.getElementById("statPrograms").textContent =
-      status.total_programs || "0";
+    document.getElementById("statPrograms").textContent    = status.total_programs || "0";
 
-    const cr = status.crash_rate_pct || 0;
+    // Crash rate
+    const cr   = status.crash_rate_pct || 0;
     const crEl = document.getElementById("statCrashRate");
     crEl.textContent = cr + "%";
-    crEl.className = "stat-value " + (cr > 20 ? "warn" : cr > 0 ? "" : "good");
+    crEl.className   = "stat-value " + (cr > 20 ? "warn" : cr > 0 ? "" : "good");
   }
 
-  function renderChart(history) {
+  function renderChart(history, status) {
     const results = history.results || [];
-    if (!results.length) return;
 
-    // Batch labels + best val_bpb per batch
-    const labels  = results.map(r => `B${r.batch_id}`);
-    const bestBpb = results.map(r => r.summary?.best_val_bpb ?? null);
-
-    // All individual experiments (flattened)
+    // Gather ALL experiments including live for the scatter
     const allPoints = [];
     results.forEach(r => {
-      r.experiments?.forEach((e, i) => {
+      r.experiments?.forEach(e => {
         if (e.status !== "crash") {
           allPoints.push({ x: `B${r.batch_id}`, y: e.val_bpb });
         }
       });
     });
 
-    bpbChart.data.labels                  = labels;
-    bpbChart.data.datasets[0].data        = bestBpb;
-    bpbChart.data.datasets[1].data        = allPoints;
+    const liveExps = (status.live_experiments || []).filter(e => e.status !== "crash");
+    const liveBatchLabel = `B${(status.batches_done || 0) + 1}`;
+    liveExps.forEach(e => allPoints.push({ x: liveBatchLabel, y: e.val_bpb }));
+
+    const labels  = results.map(r => `B${r.batch_id}`);
+    const bestBpb = results.map(r => r.summary?.best_val_bpb ?? null);
+
+    // Add live batch point if there's a live best
+    if (liveExps.length) {
+      const liveBest = Math.min(...liveExps.map(e => e.val_bpb));
+      if (!labels.includes(liveBatchLabel)) {
+        labels.push(liveBatchLabel);
+        bestBpb.push(liveBest);
+      }
+    }
+
+    // Baseline: first valid val_bpb ever seen
+    let baseline = null;
+    for (const r of results) {
+      for (const e of (r.experiments || [])) {
+        if (e.status !== "crash" && e.val_bpb) { baseline = e.val_bpb; break; }
+      }
+      if (baseline) break;
+    }
+
+    if (!baseline && liveExps.length) baseline = liveExps[0].val_bpb;
+
+    bpbChart.data.labels           = labels;
+    bpbChart.data.datasets[0].data = bestBpb;
+    bpbChart.data.datasets[1].data = allPoints;
+    bpbChart.data.datasets[2].data = baseline && labels.length
+      ? labels.map(l => ({ x: l, y: baseline }))
+      : [];
+
+    // Update improvEl with improvement vs baseline
+    const bestOverall = status.best_val_bpb;
+    document.getElementById("statBestImprov").innerHTML =
+      baseline && bestOverall && bestOverall !== baseline
+        ? `vs baseline ${improv(bestOverall, baseline)}`
+        : "lower is better";
+
     bpbChart.update();
+  }
+
+  function renderAnalysis(analysis) {
+    const panel = document.getElementById("analysisPanel");
+    if (!analysis) { panel.classList.remove("visible"); return; }
+
+    panel.classList.add("visible");
+
+    document.getElementById("analysisObs").textContent =
+      analysis.observations || "—";
+
+    const success = analysis.successful_patterns || [];
+    document.getElementById("analysisSuccess").innerHTML =
+      success.length
+        ? success.map(s => `<li>${s}</li>`).join("")
+        : "<li style='color:var(--text-muted)'>None yet</li>";
+
+    const next = analysis.next_directions || [];
+    document.getElementById("analysisNext").innerHTML =
+      next.length
+        ? next.map(n => `<li>${n}</li>`).join("")
+        : "<li style='color:var(--text-muted)'>—</li>";
   }
 
   function renderExperiments(history, status) {
@@ -588,49 +872,72 @@
       });
     });
 
-    // Ajoute les expériences live du batch en cours
+    const currentBatch = (status.batches_done || 0) + 1;
     const liveExps = (status.live_experiments || []).map(e => ({
-      ...e,
-      batch_id: (status.batches_done || 0) + 1,
-      live: true,
+      ...e, batch_id: currentBatch, live: true,
     }));
 
     const combined = [...allExps, ...liveExps];
     if (!combined.length) return;
 
-    const recent  = combined.slice(-15).reverse();
+    const recent   = combined.slice(-20).reverse();
     const validBpb = combined.filter(e => e.status !== "crash").map(e => e.val_bpb);
     const bestBpb  = validBpb.length ? Math.min(...validBpb) : null;
+
+    // Baseline = first valid experiment ever
+    let baseline = null;
+    for (const e of combined) {
+      if (e.status !== "crash" && e.val_bpb) { baseline = e.val_bpb; break; }
+    }
+
+    // Detect new live rows (for flash animation)
+    const newLiveCount = liveExps.length;
+    const isNew = (e) => e.live && newLiveCount > _prevLiveCount;
+
+    document.getElementById("expCount").textContent =
+      `(${combined.length} total)`;
 
     const html = `
       <table>
         <thead>
           <tr>
-            <th>B</th><th>Commit</th><th>val_bpb</th><th>Status</th><th>Description</th>
+            <th>Batch</th>
+            <th>Commit</th>
+            <th>val_bpb</th>
+            <th>vs baseline</th>
+            <th>Mem GB</th>
+            <th>Status</th>
+            <th>Description</th>
           </tr>
         </thead>
         <tbody>
           ${recent.map(e => {
-            const isBest = bestBpb !== null && e.val_bpb === bestBpb && e.status !== "crash";
-            const bpb    = e.status === "crash" ? "—" : e.val_bpb.toFixed(6);
-            const badge  = isBest
+            const isBest    = bestBpb !== null && e.val_bpb === bestBpb && e.status !== "crash";
+            const bpb       = e.status === "crash" ? "—" : e.val_bpb.toFixed(6);
+            const mem       = e.memory_gb ? e.memory_gb.toFixed(2) : "—";
+            const improvStr = e.status !== "crash" ? improv(e.val_bpb, baseline) : "";
+            const badge     = isBest
               ? `<span class="badge badge-best">★ best</span>`
               : `<span class="badge badge-${e.status}">${e.status}</span>`;
-            const liveTag = e.live
-              ? `<span style="color:var(--green);font-size:10px;margin-left:4px">● live</span>`
+            const liveTag   = e.live
+              ? ` <span class="badge badge-live">● live</span>`
               : "";
-            return `<tr style="${e.live ? 'opacity:0.85' : ''}">
+            const rowClass  = isNew(e) ? "row-new" : "";
+            return `<tr class="${rowClass}">
               <td>B${e.batch_id}${liveTag}</td>
-              <td>${e.commit?.slice(0,7) || "—"}</td>
+              <td style="color:var(--blue)">${e.commit?.slice(0,7) || "—"}</td>
               <td>${bpb}</td>
+              <td style="font-size:10px">${improvStr || "—"}</td>
+              <td>${mem}</td>
               <td>${badge}</td>
-              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8b949e">${e.description || "—"}</td>
+              <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${e.description || "—"}</td>
             </tr>`;
           }).join("")}
         </tbody>
       </table>`;
 
     document.getElementById("experimentsContainer").innerHTML = html;
+    _prevLiveCount = newLiveCount;
   }
 
   function renderPrograms(programs) {
@@ -638,7 +945,7 @@
 
     const validScores = programs.filter(p => p.score != null).map(p => p.score);
     const bestScore   = validScores.length ? Math.min(...validScores) : null;
-    const sorted    = [...programs].sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+    const sorted      = [...programs].sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
 
     const html = sorted.map(p => {
       const isBest = bestScore !== null && p.score === bestScore;
@@ -649,7 +956,9 @@
             <div style="display:flex;gap:6px;align-items:center">
               ${isBest ? '<span class="badge badge-best">★ best</span>' : ""}
               <span class="program-score">
-                ${p.score != null ? "score " + p.score.toFixed(4) : "no data"}
+                ${p.score != null
+                  ? `score ${p.score.toFixed(4)}`
+                  : '<span style="color:var(--text-muted);font-size:10px">no data yet</span>'}
               </span>
             </div>
           </div>
@@ -663,7 +972,7 @@
   // ----------------------------------------------------------------
   // Auto-refresh countdown
   // ----------------------------------------------------------------
-  const REFRESH_INTERVAL = 15; // secondes
+  const REFRESH_INTERVAL = 15;
   let countdown = REFRESH_INTERVAL;
 
   function tick() {
@@ -675,7 +984,6 @@
     }
   }
 
-  // Initial fetch + start countdown
   fetchAndRender();
   setInterval(tick, 1000);
 </script>

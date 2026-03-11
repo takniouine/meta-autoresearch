@@ -120,6 +120,16 @@ def api_status():
 
     live_experiments = _read_live_experiments()
 
+    # Last meta-agent analysis (for the analysis panel)
+    analyses = history.get("analyses", [])
+    last_analysis = analyses[-1] if analyses else None
+
+    # Model name from config
+    try:
+        model_name = config.get("model", "qwen2.5:7b")
+    except Exception:
+        model_name = "qwen2.5:7b"
+
     return jsonify({
         **state,
         "total_experiments": total_experiments,
@@ -128,6 +138,8 @@ def api_status():
         "max_batches":       max_batches,
         "running":           STATE_FILE.exists(),
         "live_experiments":  live_experiments,
+        "last_analysis":     last_analysis,
+        "model":             model_name,
     })
 
 
