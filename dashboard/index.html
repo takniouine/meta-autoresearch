@@ -510,7 +510,7 @@
 
       renderStatus(status);
       renderChart(history);
-      renderExperiments(history);
+      renderExperiments(history, status);
       renderPrograms(programs);
 
       document.getElementById("lastUpdate").textContent =
@@ -543,8 +543,9 @@
       status.batches_done || "0";
     document.getElementById("statBatchesSub").textContent =
       `of ${status.max_batches || 50} max`;
-    document.getElementById("statExperiments").textContent =
-      status.total_experiments || "0";
+    const liveCount = (status.live_experiments || []).length;
+    const totalExp  = (status.total_experiments || 0) + liveCount;
+    document.getElementById("statExperiments").textContent = totalExp || "0";
     document.getElementById("statPrograms").textContent =
       status.total_programs || "0";
 
@@ -578,21 +579,27 @@
     bpbChart.update();
   }
 
-  function renderExperiments(history) {
+  function renderExperiments(history, status) {
     const results = history.results || [];
     const allExps = [];
     results.forEach(r => {
       r.experiments?.forEach(e => {
-        allExps.push({ ...e, batch_id: r.batch_id });
+        allExps.push({ ...e, batch_id: r.batch_id, live: false });
       });
     });
 
-    if (!allExps.length) return;
+    // Ajoute les expériences live du batch en cours
+    const liveExps = (status.live_experiments || []).map(e => ({
+      ...e,
+      batch_id: (status.batches_done || 0) + 1,
+      live: true,
+    }));
 
-    // Show last 15 experiments, most recent first
-    const recent = allExps.slice(-15).reverse();
+    const combined = [...allExps, ...liveExps];
+    if (!combined.length) return;
 
-    const bestBpb = Math.min(...allExps.filter(e => e.status !== "crash").map(e => e.val_bpb));
+    const recent  = combined.slice(-15).reverse();
+    const bestBpb = Math.min(...combined.filter(e => e.status !== "crash").map(e => e.val_bpb));
 
     const html = `
       <table>
@@ -608,8 +615,11 @@
             const badge  = isBest
               ? `<span class="badge badge-best">★ best</span>`
               : `<span class="badge badge-${e.status}">${e.status}</span>`;
-            return `<tr>
-              <td>${e.batch_id}</td>
+            const liveTag = e.live
+              ? `<span style="color:var(--green);font-size:10px;margin-left:4px">● live</span>`
+              : "";
+            return `<tr style="${e.live ? 'opacity:0.85' : ''}">
+              <td>B${e.batch_id}${liveTag}</td>
               <td>${e.commit?.slice(0,7) || "—"}</td>
               <td>${bpb}</td>
               <td>${badge}</td>
