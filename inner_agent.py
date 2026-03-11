@@ -11,7 +11,6 @@ Cet agent reçoit un program.md comme instructions et :
 
 import json
 import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -84,6 +83,44 @@ TOOLS = [
                 "required": ["command"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_result",
+            "description": (
+                "Log one experiment result to results.tsv. "
+                "ALWAYS call this after each training run instead of using echo or write_file. "
+                "Handles all formatting automatically."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "commit": {
+                        "type": "string",
+                        "description": "7-character git hash from 'git rev-parse --short HEAD'"
+                    },
+                    "val_bpb": {
+                        "type": "number",
+                        "description": "Validation bits-per-byte from run.log (e.g. 1.3597)"
+                    },
+                    "memory_gb": {
+                        "type": "number",
+                        "description": "Peak VRAM in GB (peak_vram_mb from run.log divided by 1024)"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["keep", "discard", "crash"],
+                        "description": "'keep' if val_bpb improved over baseline, 'discard' otherwise, 'crash' if training failed"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Short description of what was changed (e.g. 'baseline', 'lr=1e-3', 'n_layer=12')"
+                    }
+                },
+                "required": ["commit", "val_bpb", "memory_gb", "status", "description"]
+            }
+        }
     }
 ]
 
@@ -130,6 +167,18 @@ def execute_tool(name, input_data):
                 output = output[:MAX_OUTPUT_CHARS] + "\n... (truncated)"
             return output
 
+        elif name == "log_result":
+            commit      = str(input_data["commit"]).strip()
+            val_bpb     = float(input_data["val_bpb"])
+            memory_gb   = float(input_data["memory_gb"])
+            status      = str(input_data["status"]).strip()
+            description = str(input_data["description"]).strip()
+
+            line = f"{commit}\t{val_bpb}\t{memory_gb}\t{status}\t{description}\n"
+            with open("results.tsv", "a", encoding="utf-8") as f:
+                f.write(line)
+            return f"OK: logged experiment — commit={commit} val_bpb={val_bpb} status={status}"
+
         else:
             return f"Error: unknown tool '{name}'"
 
@@ -167,15 +216,13 @@ IMPORTANT SETUP NOTES:
 - Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
 
 RESULTS LOGGING — THIS IS MANDATORY:
-After each experiment, append exactly ONE tab-separated line to 'results.tsv' (NOT results.txt, NOT any other file).
-The file already exists with this header: commit<TAB>val_bpb<TAB>memory_gb<TAB>status<TAB>description
-Your line must follow this EXACT format (use actual tab characters, not spaces):
-  <7-char-git-hash><TAB><val_bpb float><TAB><memory_gb float><TAB><keep|discard|crash><TAB><short description>
-Example: abc1234\t1.3648\t2.1\tkeep\tbaseline default architecture
-Use run_command with: echo "abc1234\t1.3648\t2.1\tkeep\tbaseline" >> results.tsv
-To get the git hash: git rev-parse --short HEAD
-To get val_bpb: grep "^val_bpb:" run.log
-To get memory_gb: grep "^peak_vram_mb:" run.log  (divide by 1024)
+After each training run, call the log_result tool. Do NOT use echo or write_file for this.
+Steps:
+1. run_command("git rev-parse --short HEAD")  → get commit hash
+2. run_command("grep \"^val_bpb:\" run.log")  → get val_bpb value
+3. run_command("grep \"^peak_vram_mb:\" run.log")  → get memory (divide by 1024 for GB)
+4. log_result(commit=..., val_bpb=..., memory_gb=..., status="keep"|"discard"|"crash", description=...)
+If training crashed or run.log has no val_bpb line, use val_bpb=0.0, memory_gb=0.0, status="crash".
 
 WINDOWS ENVIRONMENT — train.py is already patched for Windows:
 - FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).
