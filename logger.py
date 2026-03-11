@@ -29,15 +29,25 @@ ANALYSIS_DIR = HISTORY_DIR / "analysis"
 def get_next_ids():
     """
     Compute the next available batch_id and program_version.
-    Looks at existing files and returns the next sequence numbers.
+    Uses max existing ID + 1 (robust to deleted files).
 
     Returns: (next_batch_id, next_program_version)
     """
-    existing_batches = list(RESULTS_DIR.glob("batch_*.json"))
-    next_batch_id = len(existing_batches) + 1
+    batch_ids = []
+    for p in RESULTS_DIR.glob("batch_*.json"):
+        try:
+            batch_ids.append(int(p.stem.split("_")[1]))
+        except (IndexError, ValueError):
+            pass
+    next_batch_id = max(batch_ids, default=0) + 1
 
-    existing_programs = list(PROGRAMS_DIR.glob("program_v*.md"))
-    next_program_version = len(existing_programs) + 1
+    program_versions = []
+    for p in PROGRAMS_DIR.glob("program_v*.md"):
+        try:
+            program_versions.append(int(p.stem.split("v")[1]))
+        except (IndexError, ValueError):
+            pass
+    next_program_version = max(program_versions, default=0) + 1
 
     return next_batch_id, next_program_version
 
@@ -181,8 +191,12 @@ def load_history():
 
     programs = []
     for path in sorted(PROGRAMS_DIR.glob("program_v*.md")):
+        try:
+            version = int(path.stem.split("v")[1])
+        except (IndexError, ValueError):
+            continue
         programs.append({
-            "version": int(path.stem.split("v")[1]),
+            "version": version,
             "content": path.read_text(encoding="utf-8"),
         })
 

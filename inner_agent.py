@@ -14,7 +14,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-MODEL = "qwen2.5:7b"
 MAX_TOKENS = 8096
 COMMAND_TIMEOUT = 720     # 12 minutes max per command (5 min training + large buffer)
 MAX_OUTPUT_CHARS = 4000   # Limit output returned to the agent (context window constraints)
@@ -229,7 +228,7 @@ def execute_tool(name, input_data):
 # Main tool-use loop
 # ---------------------------------------------------------------------------
 
-def run_inner_agent(client, program_content, n_experiments):
+def run_inner_agent(client, program_content, n_experiments, model="qwen2.5:7b"):
     """
     Run the inner agent with the given program.md.
     Loops until n_experiments are done or finish_reason == "stop".
@@ -238,14 +237,14 @@ def run_inner_agent(client, program_content, n_experiments):
         client          (openai.OpenAI) : Ollama client shared with MetaAgent
         program_content (str)           : program.md content to use
         n_experiments   (int)           : number of experiments to run
+        model           (str)           : Ollama model name (from config.yaml)
 
     Returns:
         experiments (list[dict]): list of experiments parsed from results.tsv
     """
     train_py = Path("train.py").read_text(encoding="utf-8")
 
-    from pathlib import Path as _Path
-    is_evolved = _Path("history/best_train.py").exists()
+    is_evolved = Path("history/best_train.py").exists()
     evolution_note = (
         "IMPORTANT: train.py already contains the BEST configuration found across all previous batches. "
         "Build on top of it — do not reset it to defaults. Your first experiment should run it as-is to confirm the baseline, then improve from there."
@@ -288,7 +287,7 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
         print(f"  [inner_agent] API call #{iteration}...", end=" ", flush=True)
 
         response = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             max_tokens=MAX_TOKENS,
             tools=TOOLS,
             messages=messages,

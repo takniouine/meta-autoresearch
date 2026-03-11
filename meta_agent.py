@@ -20,9 +20,6 @@ import openai
 from logger import save_program, save_results, save_analysis, load_history, get_next_ids
 from inner_agent import run_inner_agent
 
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
-MODEL = "qwen2.5:7b"
-
 # Base template: start from the original autoresearch program.md
 # Falls back to empty string if not available locally
 _autoresearch_program = Path("autoresearch/program.md")
@@ -44,14 +41,17 @@ class MetaAgent:
     that guide the inner agent, which actually runs training.
     """
 
-    def __init__(self, goal):
+    def __init__(self, goal, model="qwen2.5:7b", ollama_base_url="http://localhost:11434/v1"):
         """
         Args:
-            goal (str): research objective in natural language.
-                        e.g. "find the best LLM architecture for TinyStories"
+            goal           (str): research objective in natural language.
+                                  e.g. "find the best LLM architecture for TinyStories"
+            model          (str): Ollama model name (from config.yaml)
+            ollama_base_url(str): Ollama API base URL (from config.yaml)
         """
-        self.client = openai.OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
-        self.goal = goal
+        self.client = openai.OpenAI(base_url=ollama_base_url, api_key="ollama")
+        self.goal  = goal
+        self.model = model
         print(f"[MetaAgent] Initialized. Goal: {self.goal}")
 
     # -----------------------------------------------------------------------
@@ -101,7 +101,7 @@ Analyze the results and return a JSON object with EXACTLY these keys:
 Return ONLY the JSON object, no markdown, no explanation."""
 
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -111,7 +111,7 @@ Return ONLY the JSON object, no markdown, no explanation."""
         # Strip ```json ... ``` fences if the model adds them
         if text.startswith("```"):
             parts = text.split("```")
-            text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
+            text = parts[1].strip().removeprefix("json").strip() if len(parts) > 1 else text
 
         try:
             return json.loads(text)
@@ -173,7 +173,7 @@ Base template to adapt (keep the structure, update the research strategy):
 Return ONLY the program.md content, starting with '# autoresearch'. No other text."""
 
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -312,7 +312,7 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         try:
             # Run the inner agent — blocks until n_experiments done or agent stops
-            experiments = run_inner_agent(self.client, program_content, n_experiments)
+            experiments = run_inner_agent(self.client, program_content, n_experiments, self.model)
 
             # Backfill timestamp_start for each experiment if missing
             for exp in experiments:
