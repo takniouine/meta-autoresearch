@@ -542,7 +542,7 @@
     document.getElementById("statBatches").textContent =
       status.batches_done || "0";
     document.getElementById("statBatchesSub").textContent =
-      `of ${50} max`;
+      `of ${status.max_batches || 50} max`;
     document.getElementById("statExperiments").textContent =
       status.total_experiments || "0";
     document.getElementById("statPrograms").textContent =

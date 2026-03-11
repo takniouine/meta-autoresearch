@@ -166,13 +166,19 @@ def load_history():
     """
     results = []
     for path in sorted(RESULTS_DIR.glob("batch_*.json")):
-        with open(path, encoding="utf-8") as f:
-            results.append(json.load(f))
+        try:
+            with open(path, encoding="utf-8") as f:
+                results.append(json.load(f))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[logger] Warning: could not load {path}: {e} — skipping")
 
     analyses = []
     for path in sorted(ANALYSIS_DIR.glob("analysis_*.json")):
-        with open(path, encoding="utf-8") as f:
-            analyses.append(json.load(f))
+        try:
+            with open(path, encoding="utf-8") as f:
+                analyses.append(json.load(f))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[logger] Warning: could not load {path}: {e} — skipping")
 
     programs = []
     for path in sorted(PROGRAMS_DIR.glob("program_v*.md")):

@@ -241,7 +241,16 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
 
         if finish_reason == "tool_calls" and msg.tool_calls:
             for tc in msg.tool_calls:
-                input_data = json.loads(tc.function.arguments)
+                try:
+                    input_data = json.loads(tc.function.arguments)
+                except json.JSONDecodeError as e:
+                    print(f"    [tool] Warning: malformed JSON arguments for {tc.function.name}: {e}")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": f"Error: could not parse tool arguments as JSON: {e}. Please retry with valid JSON.",
+                    })
+                    continue
                 print(f"    [tool] {tc.function.name}({list(input_data.keys())})")
                 result = execute_tool(tc.function.name, input_data)
                 messages.append({

@@ -253,6 +253,11 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         # Crée une branche dédiée pour ce batch (comme autoresearch le fait)
         branch_name = f"autoresearch/batch_{batch_id:03d}"
+        # Supprime la branche si elle existe déjà (run précédent interrompu)
+        subprocess.run(
+            ["git", "branch", "-D", branch_name],
+            capture_output=True,
+        )
         subprocess.run(
             ["git", "checkout", "-b", branch_name],
             check=True, capture_output=True,
@@ -269,8 +274,11 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         finally:
             # Revient TOUJOURS sur la branche d'origine, même en cas d'erreur
-            subprocess.run(["git", "checkout", current_branch], capture_output=True)
-            print(f"[MetaAgent] Returned to branch: {current_branch}")
+            result = subprocess.run(["git", "checkout", current_branch], capture_output=True)
+            if result.returncode != 0:
+                print(f"[MetaAgent] Warning: failed to return to branch '{current_branch}' — run 'git checkout {current_branch}' manually")
+            else:
+                print(f"[MetaAgent] Returned to branch: {current_branch}")
 
         # Sauvegarde les résultats dans history/
         save_results(batch_id, program_version, experiments)
