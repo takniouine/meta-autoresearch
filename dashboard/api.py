@@ -15,6 +15,7 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
 from flask import Flask, jsonify, send_from_directory
 
 # ---------------------------------------------------------------------------
@@ -81,11 +82,18 @@ def api_status():
     )
     crash_rate = round(total_crashes / max(total_experiments, 1) * 100, 1)
 
+    try:
+        config = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+        max_batches = config.get("max_batches", 50)
+    except Exception:
+        max_batches = 50
+
     return jsonify({
         **state,
         "total_experiments": total_experiments,
         "total_programs":    len(history.get("programs", [])),
         "crash_rate_pct":    crash_rate,
+        "max_batches":       max_batches,
         "running":           STATE_FILE.exists(),
     })
 

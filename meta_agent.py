@@ -14,15 +14,13 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-import anthropic
-from dotenv import load_dotenv
+import openai
 
 from logger import save_program, save_results, save_analysis, load_history, get_next_ids
 from inner_agent import run_inner_agent
 
-load_dotenv()  # Charge ANTHROPIC_API_KEY depuis .env
-
-MODEL = "claude-sonnet-4-6"
+OLLAMA_BASE_URL = "http://localhost:11434/v1"
+MODEL = "qwen2.5:7b"
 
 # Template de base : on part du program.md original d'autoresearch
 # S'il n'est pas disponible localement, on utilise une chaîne vide
@@ -47,7 +45,7 @@ class MetaAgent:
         goal (str) : objectif en langage naturel.
                      Ex: "find the best LLM architecture for TinyStories"
         """
-        self.client = anthropic.Anthropic()   # Lit ANTHROPIC_API_KEY depuis l'environnement
+        self.client = openai.OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
         self.goal = goal
         print(f"[MetaAgent] Initialized. Goal: {self.goal}")
 
@@ -97,13 +95,13 @@ Analyze the results and return a JSON object with EXACTLY these keys:
 
 Return ONLY the JSON object, no markdown, no explanation."""
 
-        response = self.client.messages.create(
+        response = self.client.chat.completions.create(
             model=MODEL,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        text = response.content[0].text.strip()
+        text = response.choices[0].message.content.strip()
 
         # Retire les balises ```json ... ``` si Claude les ajoute
         if text.startswith("```"):
@@ -169,13 +167,13 @@ Base template to adapt (keep the structure, update the research strategy):
 
 Return ONLY the program.md content, starting with '# autoresearch'. No other text."""
 
-        response = self.client.messages.create(
+        response = self.client.chat.completions.create(
             model=MODEL,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
 
     # -----------------------------------------------------------------------
     # evaluate_program — scorer un batch de résultats
@@ -255,6 +253,11 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         # Crée une branche dédiée pour ce batch (comme autoresearch le fait)
         branch_name = f"autoresearch/batch_{batch_id:03d}"
+        # Supprime la branche si elle existe déjà (run précédent interrompu)
+        subprocess.run(
+            ["git", "branch", "-D", branch_name],
+            capture_output=True,
+        )
         subprocess.run(
             ["git", "checkout", "-b", branch_name],
             check=True, capture_output=True,
@@ -271,8 +274,11 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         finally:
             # Revient TOUJOURS sur la branche d'origine, même en cas d'erreur
-            subprocess.run(["git", "checkout", current_branch], capture_output=True)
-            print(f"[MetaAgent] Returned to branch: {current_branch}")
+            result = subprocess.run(["git", "checkout", current_branch], capture_output=True)
+            if result.returncode != 0:
+                print(f"[MetaAgent] Warning: failed to return to branch '{current_branch}' — run 'git checkout {current_branch}' manually")
+            else:
+                print(f"[MetaAgent] Returned to branch: {current_branch}")
 
         # Sauvegarde les résultats dans history/
         save_results(batch_id, program_version, experiments)

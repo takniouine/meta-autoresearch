@@ -9,15 +9,16 @@ Cet agent reçoit un program.md comme instructions et :
 5. Répète N fois
 """
 
+import json
 import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "qwen2.5:7b"
 MAX_TOKENS = 8096
 COMMAND_TIMEOUT = 720     # 12 minutes max par commande (5 min training + large buffer)
-MAX_OUTPUT_CHARS = 4000   # Limite la sortie renvoyée à Claude (limites de contexte)
+MAX_OUTPUT_CHARS = 4000   # Limite la sortie renvoyée à l'agent (limites de contexte)
 
 
 # ---------------------------------------------------------------------------
@@ -26,53 +27,62 @@ MAX_OUTPUT_CHARS = 4000   # Limite la sortie renvoyée à Claude (limites de con
 
 TOOLS = [
     {
-        "name": "read_file",
-        "description": "Read the full contents of a file on disk.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the file (e.g. 'train.py', 'run.log', 'results.tsv')"
-                }
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "write_file",
-        "description": "Write content to a file, creating it if needed or overwriting it completely.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the file"
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the full contents of a file on disk.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative path to the file (e.g. 'train.py', 'run.log', 'results.tsv')"
+                    }
                 },
-                "content": {
-                    "type": "string",
-                    "description": "Full content to write to the file"
-                }
-            },
-            "required": ["path", "content"]
+                "required": ["path"]
+            }
         }
     },
     {
-        "name": "run_command",
-        "description": (
-            "Run a shell command and return its output (stdout + stderr). "
-            "For training runs, redirect output to run.log: "
-            "'uv run train.py > run.log 2>&1'"
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "Shell command to execute"
-                }
-            },
-            "required": ["command"]
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file, creating it if needed or overwriting it completely.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative path to the file"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Full content to write to the file"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": (
+                "Run a shell command and return its output (stdout + stderr). "
+                "For training runs, redirect output to run.log: "
+                "'uv run train.py > run.log 2>&1'"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute"
+                    }
+                },
+                "required": ["command"]
+            }
         }
     }
 ]
@@ -136,27 +146,36 @@ def execute_tool(name, input_data):
 def run_inner_agent(client, program_content, n_experiments):
     """
     Lance l'agent inner avec le program.md donné.
-    Tourne jusqu'à n_experiments expériences ou jusqu'à stop_reason == "end_turn".
+    Tourne jusqu'à n_experiments expériences ou jusqu'à finish_reason == "stop".
 
     Arguments :
-        client          (anthropic.Anthropic) : client API partagé avec MetaAgent
-        program_content (str)                 : contenu du program.md à utiliser
-        n_experiments   (int)                 : nombre d'expériences à effectuer
+        client          (openai.OpenAI) : client Ollama partagé avec MetaAgent
+        program_content (str)           : contenu du program.md à utiliser
+        n_experiments   (int)           : nombre d'expériences à effectuer
 
     Retourne :
         experiments (list[dict]) : liste des expériences parsées depuis results.tsv
     """
     train_py = Path("train.py").read_text(encoding="utf-8")
 
-    # Message initial : donne tout le contexte à l'agent
     initial_message = f"""You are an autonomous LLM research agent. Your goal is to minimize val_bpb.
 
 IMPORTANT SETUP NOTES:
 - You are already on a dedicated git branch. Do NOT run 'git checkout -b'.
-- results.tsv already has its header row. Append results after each experiment.
 - Run exactly {n_experiments} experiments, then stop. Do not ask for confirmation.
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
 - Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
+
+RESULTS LOGGING — THIS IS MANDATORY:
+After each experiment, append exactly ONE tab-separated line to 'results.tsv' (NOT results.txt, NOT any other file).
+The file already exists with this header: commit<TAB>val_bpb<TAB>memory_gb<TAB>status<TAB>description
+Your line must follow this EXACT format (use actual tab characters, not spaces):
+  <7-char-git-hash><TAB><val_bpb float><TAB><memory_gb float><TAB><keep|discard|crash><TAB><short description>
+Example: abc1234\t1.3648\t2.1\tkeep\tbaseline default architecture
+Use run_command with: echo "abc1234\t1.3648\t2.1\tkeep\tbaseline" >> results.tsv
+To get the git hash: git rev-parse --short HEAD
+To get val_bpb: grep "^val_bpb:" run.log
+To get memory_gb: grep "^peak_vram_mb:" run.log  (divide by 1024)
 
 WINDOWS ENVIRONMENT — train.py is already patched for Windows:
 - FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).
@@ -183,71 +202,72 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
         iteration += 1
         print(f"  [inner_agent] API call #{iteration}...", end=" ", flush=True)
 
-        for _attempt in range(5):
-            try:
-                response = client.messages.create(
-                    model=MODEL,
-                    max_tokens=MAX_TOKENS,
-                    tools=TOOLS,
-                    messages=messages,
-                )
-                break
-            except Exception as e:
-                if "rate_limit" in str(e).lower() or "429" in str(e):
-                    wait = 60 * (_attempt + 1)
-                    print(f"\n  [inner_agent] Rate limit hit — waiting {wait}s...")
-                    time.sleep(wait)
-                else:
-                    raise
+        response = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            tools=TOOLS,
+            messages=messages,
+        )
 
-        print(f"stop={response.stop_reason}")
+        msg = response.choices[0].message
+        finish_reason = response.choices[0].finish_reason
+        print(f"stop={finish_reason}")
 
-        # Ajoute la réponse complète de Claude à l'historique des messages
-        messages.append({"role": "assistant", "content": response.content})
+        # Affiche un extrait du texte de réflexion de l'agent
+        if msg.content:
+            preview = msg.content.strip()[:150].replace("\n", " ")
+            print(f"    [agent] {preview}...")
 
-        # Affiche un extrait du texte de réflexion de Claude
-        for block in response.content:
-            if hasattr(block, "text") and block.text:
-                preview = block.text.strip()[:150].replace("\n", " ")
-                print(f"    [claude] {preview}...")
+        # Sérialise le message assistant pour l'historique
+        assistant_msg = {"role": "assistant", "content": msg.content or ""}
+        if msg.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]
+        messages.append(assistant_msg)
 
-        if response.stop_reason == "end_turn":
-            print("  [inner_agent] Agent signaled end_turn — done.")
+        if finish_reason == "stop":
+            print("  [inner_agent] Agent signaled stop — done.")
             break
 
-        if response.stop_reason == "max_tokens":
-            # La réponse a été tronquée. Si elle contient des tool_use incomplets,
-            # on doit fournir des tool_result vides pour garder la conversation valide.
+        if finish_reason == "length":
+            # Réponse tronquée — continuer
             print("  [inner_agent] Warning: max_tokens hit — recovering...")
-            incomplete = [b for b in response.content if b.type == "tool_use"]
-            if incomplete:
-                tool_results = [
-                    {
-                        "type":        "tool_result",
-                        "tool_use_id": b.id,
-                        "content":     "Response was truncated. Please continue from where you left off.",
-                    }
-                    for b in incomplete
-                ]
-                messages.append({"role": "user", "content": tool_results})
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": "Response was truncated. Please continue from where you left off.",
+                    })
             else:
-                # Pas de tool_use : on relance juste avec une invite de continuation
                 messages.append({"role": "user", "content": "Continue."})
             continue
 
-        if response.stop_reason == "tool_use":
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    print(f"    [tool] {block.name}({list(block.input.keys())})")
-                    result = execute_tool(block.name, block.input)
-                    tool_results.append({
-                        "type":        "tool_result",
-                        "tool_use_id": block.id,
-                        "content":     result,
+        if finish_reason == "tool_calls" and msg.tool_calls:
+            for tc in msg.tool_calls:
+                try:
+                    input_data = json.loads(tc.function.arguments)
+                except json.JSONDecodeError as e:
+                    print(f"    [tool] Warning: malformed JSON arguments for {tc.function.name}: {e}")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": f"Error: could not parse tool arguments as JSON: {e}. Please retry with valid JSON.",
                     })
-            # Renvoie les résultats à Claude pour qu'il continue son raisonnement
-            messages.append({"role": "user", "content": tool_results})
+                    continue
+                print(f"    [tool] {tc.function.name}({list(input_data.keys())})")
+                result = execute_tool(tc.function.name, input_data)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
 
     return _parse_results_tsv()
 

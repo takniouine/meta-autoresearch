@@ -13,5 +13,5 @@ max_batches: 50
 # Arrêt anticipé si pas de progrès pendant N batches consécutifs
 convergence_threshold: 3
 
-# Modèle Anthropic utilisé pour le meta-agent ET l'inner agent
-model: "claude-sonnet-4-6"
+# Modèle utilisé pour le meta-agent ET l'inner agent (via Ollama)
+model: "qwen2.5:7b"
