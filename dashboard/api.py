@@ -1,14 +1,14 @@
 """
-dashboard/api.py — Backend Flask du dashboard meta-autoresearch.
+dashboard/api.py — Flask backend for the meta-autoresearch dashboard.
 
-Lance avec : uv run dashboard/api.py
-Accès sur   : http://localhost:5000
+Run with: uv run dashboard/api.py
+Access at: http://localhost:5000
 
-Endpoints :
-    GET /                → sert index.html
-    GET /api/status      → état courant (state.json)
-    GET /api/history     → tous les résultats de batches
-    GET /api/programs    → toutes les versions de program.md
+Endpoints:
+    GET /                → serve index.html
+    GET /api/status      → current state (state.json + live results.tsv)
+    GET /api/history     → all completed batch results
+    GET /api/programs    → all program.md versions with scores
 """
 
 import json
@@ -19,8 +19,7 @@ import yaml
 from flask import Flask, jsonify, send_from_directory
 
 # ---------------------------------------------------------------------------
-# Le dashboard est dans dashboard/ mais importe depuis la racine du projet
-# On ajoute la racine au path Python
+# The dashboard lives in dashboard/ but imports from the project root
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -35,7 +34,10 @@ RESULTS_TSV   = ROOT / "results.tsv"
 
 
 def _read_live_experiments():
-    """Lit results.tsv (batch en cours) et retourne une liste d'expériences live."""
+    """
+    Read results.tsv (current batch in progress) and return a list of live experiments.
+    Called on every /api/status poll so the dashboard updates after each training run.
+    """
     if not RESULTS_TSV.exists():
         return []
     experiments = []
@@ -61,12 +63,12 @@ def _read_live_experiments():
 
 
 # ---------------------------------------------------------------------------
-# Serveur du frontend
+# Frontend
 # ---------------------------------------------------------------------------
 
 @app.route("/")
 def index():
-    """Sert la page HTML du dashboard."""
+    """Serve the dashboard HTML page."""
     return send_from_directory(str(DASHBOARD_DIR), "index.html")
 
 
@@ -77,8 +79,9 @@ def index():
 @app.route("/api/status")
 def api_status():
     """
-    Retourne l'état courant de la boucle meta.
-    Lit state.json s'il existe, sinon retourne un état vide.
+    Return the current state of the meta loop.
+    Reads state.json if it exists, otherwise returns an empty state.
+    Also includes live_experiments from results.tsv for the current batch.
     """
     if STATE_FILE.exists():
         state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -92,13 +95,13 @@ def api_status():
             "last_updated":         None,
         }
 
-    # Charge l'historique pour les statistiques globales
+    # Load history for aggregate statistics
     try:
         history = load_history()
     except Exception:
         history = {"num_batches": 0, "results": [], "programs": []}
 
-    # Calcule les statistiques agrégées
+    # Compute aggregate statistics
     total_experiments = sum(
         len(batch.get("experiments", []))
         for batch in history.get("results", [])
@@ -131,8 +134,8 @@ def api_status():
 @app.route("/api/history")
 def api_history():
     """
-    Retourne l'historique complet des batches.
-    Utilisé pour tracer la courbe val_bpb et remplir la table d'expériences.
+    Return the full history of completed batches.
+    Used to plot the val_bpb curve and populate the experiments table.
     """
     try:
         history = load_history()
@@ -144,13 +147,13 @@ def api_history():
 @app.route("/api/programs")
 def api_programs():
     """
-    Retourne la liste de toutes les versions de program.md avec leurs scores.
+    Return all program.md versions with their scores.
     """
     try:
         history = load_history()
         programs = history.get("programs", [])
 
-        # Associe le score de chaque program à sa version
+        # Associate each program version with its best score
         scores = {}
         for batch in history.get("results", []):
             v   = batch.get("program_version")
@@ -176,7 +179,7 @@ def api_programs():
 
 
 # ---------------------------------------------------------------------------
-# Point d'entrée
+# Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 """
-meta_agent.py — Le cerveau de meta-autoresearch.
+meta_agent.py — The brain of meta-autoresearch.
 
-La classe MetaAgent gère la boucle de recherche de haut niveau :
-1. Analyser les résultats des batches précédents
-2. Générer un meilleur program.md
-3. Lancer un batch d'expériences (via inner_agent)
-4. Sauvegarder les résultats et l'analyse
-5. Répéter
+MetaAgent manages the high-level research loop:
+1. Analyze results from previous batches
+2. Generate a better program.md
+3. Run a batch of experiments (via inner_agent)
+4. Save results and analysis
+5. Repeat
 """
 
 import json
@@ -22,8 +22,8 @@ from inner_agent import run_inner_agent
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 MODEL = "qwen2.5:7b"
 
-# Template de base : on part du program.md original d'autoresearch
-# S'il n'est pas disponible localement, on utilise une chaîne vide
+# Base template: start from the original autoresearch program.md
+# Falls back to empty string if not available locally
 _autoresearch_program = Path("autoresearch/program.md")
 BASE_PROGRAM = _autoresearch_program.read_text(encoding="utf-8") if _autoresearch_program.exists() else ""
 
@@ -34,39 +34,40 @@ BASE_PROGRAM = _autoresearch_program.read_text(encoding="utf-8") if _autoresearc
 
 class MetaAgent:
     """
-    L'agent de niveau 1 : optimise les instructions de recherche (program.md).
+    The level-1 agent: optimizes research instructions (program.md).
 
-    Il n'entraîne jamais de modèle directement — il génère les instructions
-    qui guident l'inner agent qui, lui, entraîne les modèles.
+    It never trains models directly — it generates the instructions
+    that guide the inner agent, which actually runs training.
     """
 
     def __init__(self, goal):
         """
-        goal (str) : objectif en langage naturel.
-                     Ex: "find the best LLM architecture for TinyStories"
+        Args:
+            goal (str): research objective in natural language.
+                        e.g. "find the best LLM architecture for TinyStories"
         """
         self.client = openai.OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
         self.goal = goal
         print(f"[MetaAgent] Initialized. Goal: {self.goal}")
 
     # -----------------------------------------------------------------------
-    # analyze_results — comprendre ce qui s'est passé
+    # analyze_results — understand what happened
     # -----------------------------------------------------------------------
 
     def analyze_results(self, history):
         """
-        Appelle le meta-agent LLM pour analyser l'historique et identifier les patterns.
+        Call the meta-agent LLM to analyze history and identify patterns.
 
-        Arguments :
-            history (dict) : retourné par load_history()
+        Args:
+            history (dict): returned by load_history()
 
-        Retourne un dict avec les clés :
-            observations        (str)  : patterns observés
-            successful_patterns (list) : idées qui ont amélioré val_bpb
-            failed_patterns     (list) : idées qui ont empiré ou crashé
-            next_directions     (list) : directions à explorer au prochain batch
+        Returns a dict with keys:
+            observations        (str)  : observed patterns
+            successful_patterns (list) : ideas that improved val_bpb
+            failed_patterns     (list) : ideas that made things worse or crashed
+            next_directions     (list) : directions to explore in the next batch
         """
-        # Cas spécial : pas encore d'historique
+        # Special case: no history yet
         if not history["results"]:
             return {
                 "observations":        "No experiments run yet. Starting from scratch.",
@@ -103,7 +104,7 @@ Return ONLY the JSON object, no markdown, no explanation."""
 
         text = response.choices[0].message.content.strip()
 
-        # Retire les balises ```json ... ``` si le modèle les ajoute
+        # Strip ```json ... ``` fences if the model adds them
         if text.startswith("```"):
             parts = text.split("```")
             text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
@@ -120,21 +121,21 @@ Return ONLY the JSON object, no markdown, no explanation."""
             }
 
     # -----------------------------------------------------------------------
-    # generate_program — écrire de meilleures instructions
+    # generate_program — write better instructions
     # -----------------------------------------------------------------------
 
     def generate_program(self, history, analysis):
         """
-        Appelle le meta-agent LLM pour générer un nouveau program.md amélioré.
+        Call the meta-agent LLM to generate an improved program.md.
 
-        Arguments :
-            history  (dict) : retourné par load_history()
-            analysis (dict) : retourné par analyze_results()
+        Args:
+            history  (dict): returned by load_history()
+            analysis (dict): returned by analyze_results()
 
-        Retourne :
-            program_content (str) : contenu complet du nouveau program.md
+        Returns:
+            program_content (str): full content of the new program.md
         """
-        # Collecte toutes les idées déjà testées pour éviter les répétitions
+        # Collect all ideas already tried to avoid repetition
         ideas_tried = []
         for batch in history.get("results", []):
             for exp in batch.get("experiments", []):
@@ -176,68 +177,69 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
         return response.choices[0].message.content.strip()
 
     # -----------------------------------------------------------------------
-    # evaluate_program — scorer un batch de résultats
+    # evaluate_program — score a batch of results
     # -----------------------------------------------------------------------
 
     def evaluate_program(self, batch_results):
         """
-        Score un batch de résultats pour comparer les versions de program.md.
+        Score a batch of results to compare program.md versions.
 
-        Arguments :
-            batch_results (dict) : un élément de history["results"]
+        Args:
+            batch_results (dict): one element from history["results"]
 
-        Retourne :
-            score (float|None) : plus bas = meilleur. None si tout a crashé.
+        Returns:
+            score (float|None): lower is better. None if all experiments crashed.
 
-        Formule :
+        Formula:
             score = best_val_bpb × 0.7 + crash_rate × 0.3
 
-        Pourquoi cette formule ?
-            - best_val_bpb est la métrique principale (70% du score)
-            - crash_rate pénalise les instructions qui causent des plantages (30%)
-            - Un program.md stable mais légèrement moins bon peut être préféré
+        Rationale:
+            - best_val_bpb is the primary metric (70% of score)
+            - crash_rate penalizes instructions that cause crashes (30%)
+            - A stable but slightly worse program.md may be preferred over a
+              high-variance one that occasionally crashes
         """
         summary = batch_results.get("summary", {})
         best_val_bpb = summary.get("best_val_bpb")
         crash_rate   = summary.get("crash_rate", 1.0)
 
         if best_val_bpb is None:
-            return None   # Tous les runs ont crashé — pas de score
+            return None   # All runs crashed — no score
 
         return round(best_val_bpb * 0.7 + crash_rate * 0.3, 6)
 
     # -----------------------------------------------------------------------
-    # run_batch — lancer N expériences avec un program.md donné
+    # run_batch — launch N experiments with a given program.md
     # -----------------------------------------------------------------------
 
     def run_batch(self, program_content, n_experiments=10):
         """
-        Lance un batch d'expériences avec le program.md donné.
+        Run a batch of experiments with the given program.md.
 
-        Workflow :
-            1. Sauvegarde program.md dans history/programs/ et sur disque
-            2. Mémorise la branche courante pour y revenir après
-            3. Crée une branche git dédiée (autoresearch/batch_XXX)
-            4. Lance l'inner agent (Claude avec outils)
-            5. Parse les résultats depuis results.tsv
-            6. Revient sur la branche d'origine
-            7. Sauvegarde les résultats dans history/results/
+        Workflow:
+            1. Save program.md to history/programs/ and write it to disk
+            2. Record the current branch to return to after the batch
+            3. Create a dedicated git branch (autoresearch/batch_XXX)
+            4. Run the inner agent (LLM with tools)
+            5. Parse results from results.tsv
+            6. Return to the original branch
+            7. Save results to history/results/
 
-        Arguments :
-            program_content (str) : contenu du program.md à utiliser
-            n_experiments   (int) : nombre d'expériences à effectuer
+        Args:
+            program_content (str): program.md content to use
+            n_experiments   (int): number of experiments to run
 
-        Retourne :
+        Returns:
             (experiments, batch_id, program_version)
         """
         batch_id, _      = get_next_ids()
         program_version  = save_program(program_content)
         timestamp_start  = datetime.now().isoformat(timespec="seconds")
 
-        # Écrit program.md sur disque (l'inner agent le lira via read_file)
+        # Write program.md to disk (inner agent reads it via read_file)
         Path("program.md").write_text(program_content, encoding="utf-8")
 
-        # Initialise results.tsv (l'inner agent y écrira les lignes de résultats)
+        # Initialize results.tsv (auto-log will append rows after each training run)
         Path("results.tsv").write_text(
             "commit\tval_bpb\tmemory_gb\tstatus\tdescription\n",
             encoding="utf-8"
@@ -245,15 +247,15 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         print(f"\n[MetaAgent] ═══ Batch {batch_id} — program v{program_version:03d} ═══")
 
-        # Mémorise la branche courante pour y revenir après le batch
+        # Record the current branch to return to after the batch
         current_branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True, text=True, check=True,
         ).stdout.strip()
 
-        # Crée une branche dédiée pour ce batch (comme autoresearch le fait)
+        # Create a dedicated branch for this batch (mirrors autoresearch convention)
         branch_name = f"autoresearch/batch_{batch_id:03d}"
-        # Supprime la branche si elle existe déjà (run précédent interrompu)
+        # Delete the branch first if it exists (interrupted run recovery)
         subprocess.run(
             ["git", "branch", "-D", branch_name],
             capture_output=True,
@@ -265,22 +267,22 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
         print(f"[MetaAgent] Created branch: {branch_name}")
 
         try:
-            # Lance l'inner agent — bloquant jusqu'à n_experiments ou end_turn
+            # Run the inner agent — blocks until n_experiments done or agent stops
             experiments = run_inner_agent(self.client, program_content, n_experiments)
 
-            # Ajoute le timestamp de début à chaque expérience (si manquant)
+            # Backfill timestamp_start for each experiment if missing
             for exp in experiments:
                 exp.setdefault("timestamp_start", timestamp_start)
 
         finally:
-            # Revient TOUJOURS sur la branche d'origine, même en cas d'erreur
+            # Always return to the original branch, even if an error occurred
             result = subprocess.run(["git", "checkout", current_branch], capture_output=True)
             if result.returncode != 0:
                 print(f"[MetaAgent] Warning: failed to return to branch '{current_branch}' — run 'git checkout {current_branch}' manually")
             else:
                 print(f"[MetaAgent] Returned to branch: {current_branch}")
 
-        # Sauvegarde les résultats dans history/
+        # Save results to history/
         save_results(batch_id, program_version, experiments)
 
         score = self.evaluate_program({"summary": {

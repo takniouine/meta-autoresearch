@@ -1,14 +1,14 @@
 """
-run_meta.py — Point d'entrée de meta-autoresearch.
+run_meta.py — Entry point for meta-autoresearch.
 
-Usage :
+Usage:
     uv run run_meta.py --goal "find the best LLM architecture for TinyStories"
 
-Ce script :
-1. Lit config.yaml pour les paramètres
-2. Reprend là où on s'est arrêté si state.json existe
-3. Lance la boucle : analyze → generate_program → run_batch → repeat
-4. S'arrête si convergence détectée ou max_batches atteint
+This script:
+1. Reads config.yaml for parameters
+2. Resumes from state.json if it exists
+3. Runs the loop: analyze → generate_program → run_batch → repeat
+4. Stops on convergence or when max_batches is reached
 """
 
 import argparse
@@ -23,21 +23,21 @@ from meta_agent import MetaAgent
 
 
 # ---------------------------------------------------------------------------
-# Chargement de la configuration et de l'état
+# Configuration and state loading
 # ---------------------------------------------------------------------------
 
 def load_config():
-    """Lit config.yaml et retourne un dict."""
+    """Read config.yaml and return a dict."""
     with open("config.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 def load_state(goal):
     """
-    Charge state.json si le fichier existe ET si le goal correspond.
-    Sinon, crée un état vide pour repartir de zéro.
+    Load state.json if it exists AND the goal matches.
+    Otherwise create a fresh state to start from scratch.
 
-    state.json est dans .gitignore — il reste local.
+    state.json is in .gitignore — it stays local.
     """
     path = Path("state.json")
     if path.exists():
@@ -54,32 +54,33 @@ def load_state(goal):
         "batches_done":         0,
         "best_val_bpb":         None,
         "no_improvement_count": 0,
+        "consecutive_crashes":  0,
         "started_at":           datetime.now().isoformat(timespec="seconds"),
         "last_updated":         datetime.now().isoformat(timespec="seconds"),
     }
 
 
 def save_state(state):
-    """Sauvegarde l'état courant dans state.json."""
+    """Persist current state to state.json."""
     state["last_updated"] = datetime.now().isoformat(timespec="seconds")
     Path("state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
-# Boucle principale
+# Main loop
 # ---------------------------------------------------------------------------
 
 def run(goal, config):
     """
-    Lance la boucle meta-research.
+    Run the meta-research loop.
 
-    Pour chaque batch :
-      1. Charger l'historique complet
-      2. Analyser les résultats (identifier les patterns)
-      3. Générer un nouveau program.md
-      4. Lancer le batch d'expériences (inner agent)
-      5. Sauvegarder l'analyse et l'état
-      6. Vérifier la convergence
+    For each batch:
+      1. Load the full history
+      2. Analyze results (identify patterns)
+      3. Generate a new program.md
+      4. Run the experiment batch (inner agent)
+      5. Save the analysis and update state
+      6. Check for convergence
     """
     state = load_state(goal)
     agent = MetaAgent(goal=goal)
@@ -93,7 +94,7 @@ def run(goal, config):
     print(f"[run_meta] {n_exp} experiments/batch — max {max_batches} batches — stop after {threshold} batches without improvement")
 
     # -----------------------------------------------------------------------
-    # Boucle principale
+    # Main loop
     # -----------------------------------------------------------------------
 
     for batch_num in range(state["batches_done"] + 1, max_batches + 1):
@@ -102,36 +103,36 @@ def run(goal, config):
         print(f"[run_meta]  BATCH {batch_num} / {max_batches}")
         print(f"[run_meta] {'═' * 60}")
 
-        # 1. Charger l'historique
+        # 1. Load history
         history = load_history()
 
-        # 2. Analyser
+        # 2. Analyze
         print(f"[run_meta] Analyzing {history['num_batches']} batch(es) of history...")
         analysis = agent.analyze_results(history)
         print(f"[run_meta] Observations: {str(analysis.get('observations', ''))[:120]}...")
         print(f"[run_meta] Next directions: {analysis.get('next_directions', [])}")
 
-        # 3. Générer program.md
+        # 3. Generate program.md
         print(f"[run_meta] Generating program.md...")
         program_content = agent.generate_program(history, analysis)
         print(f"[run_meta] program.md ready ({len(program_content)} chars)")
 
-        # 4. Lancer le batch
+        # 4. Run the batch
         experiments, batch_id, program_version = agent.run_batch(
             program_content,
             n_experiments=n_exp,
         )
 
-        # 5. Sauvegarder l'analyse dans history/analysis/
+        # 5. Save analysis to history/analysis/
         save_analysis(batch_id, analysis)
 
-        # 6. Calculer le meilleur val_bpb de ce batch
+        # 6. Compute best val_bpb for this batch
         valid = [e for e in experiments if e["status"] != "crash"]
         batch_best = min((e["val_bpb"] for e in valid), default=None)
 
-        # 7. Mettre à jour l'état et vérifier la convergence
+        # 7. Update state and check convergence
         if batch_best is not None:
-            # Batch valide : reset du compteur de crashes consécutifs
+            # Valid batch — reset consecutive crash counter
             state["consecutive_crashes"] = 0
             if state["best_val_bpb"] is None or batch_best < state["best_val_bpb"]:
                 print(f"[run_meta] New best val_bpb: {batch_best:.6f}  (was {state['best_val_bpb']})")
@@ -141,26 +142,26 @@ def run(goal, config):
                 state["no_improvement_count"] += 1
                 print(f"[run_meta] No improvement {state['no_improvement_count']}/{threshold}  (best: {state['best_val_bpb']:.6f})")
         else:
-            # Batch entièrement crashé : ne compte PAS comme un plateau —
-            # le programme est peut-être mauvais, pas le modèle convergé
+            # All experiments crashed — do NOT count as a convergence plateau.
+            # The program.md may be bad; that is separate from the model converging.
             state["consecutive_crashes"] = state.get("consecutive_crashes", 0) + 1
             print(f"[run_meta] All experiments crashed ({state['consecutive_crashes']} consecutive crash batch(es))")
 
         state["batches_done"] = batch_num
         save_state(state)
 
-        # Arrêt sur convergence réelle (plateau avec expériences valides)
+        # Stop on true convergence (plateau with valid experiments)
         if state["no_improvement_count"] >= threshold:
             print(f"\n[run_meta] Convergence detected — {threshold} batches without improvement.")
             break
 
-        # Arrêt sur trop de crashes consécutifs (program.md inutilisable)
+        # Stop on too many consecutive crash batches (program.md is unusable)
         if state.get("consecutive_crashes", 0) >= max_crashes:
             print(f"\n[run_meta] Stopping — {max_crashes} consecutive crash batches. Check program.md quality.")
             break
 
     # -----------------------------------------------------------------------
-    # Résumé final
+    # Final summary
     # -----------------------------------------------------------------------
 
     history = load_history()
@@ -176,7 +177,7 @@ def run(goal, config):
 
 
 # ---------------------------------------------------------------------------
-# Point d'entrée
+# Entry point
 # ---------------------------------------------------------------------------
 
 def main():
@@ -187,7 +188,7 @@ def main():
         "--goal",
         type=str,
         required=True,
-        help='Research objective in one sentence. Ex: "find the best LLM for TinyStories"',
+        help='Research objective in one sentence. e.g. "find the best LLM for TinyStories"',
     )
     args = parser.parse_args()
 
