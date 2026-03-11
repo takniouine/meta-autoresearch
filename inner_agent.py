@@ -1,12 +1,12 @@
 """
-inner_agent.py — L'agent inner qui exécute les expériences d'entraînement.
+inner_agent.py — The inner agent that runs training experiments.
 
-Cet agent reçoit un program.md comme instructions et :
-1. Modifie train.py avec des idées d'amélioration
-2. Lance l'entraînement (5 minutes)
-3. Mesure val_bpb
-4. Garde si meilleur, discard sinon
-5. Répète N fois
+This agent receives program.md as instructions and:
+1. Modifies train.py with improvement ideas
+2. Runs training (5 minutes)
+3. Measures val_bpb
+4. Keeps if better, discards otherwise
+5. Repeats N times
 """
 
 import json
@@ -16,12 +16,12 @@ from pathlib import Path
 
 MODEL = "qwen2.5:7b"
 MAX_TOKENS = 8096
-COMMAND_TIMEOUT = 720     # 12 minutes max par commande (5 min training + large buffer)
-MAX_OUTPUT_CHARS = 4000   # Limite la sortie renvoyée à l'agent (limites de contexte)
+COMMAND_TIMEOUT = 720     # 12 minutes max per command (5 min training + large buffer)
+MAX_OUTPUT_CHARS = 4000   # Limit output returned to the agent (context window constraints)
 
 
 # ---------------------------------------------------------------------------
-# Définition des outils
+# Tool definitions
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -88,14 +88,14 @@ TOOLS = [
 
 
 # ---------------------------------------------------------------------------
-# Auto-logging après chaque training run
+# Auto-logging after each training run
 # ---------------------------------------------------------------------------
 
 def _auto_log_from_run_log():
     """
-    Extrait val_bpb et peak_vram_mb depuis run.log et appende une ligne à results.tsv.
-    Appelé automatiquement après chaque commande contenant 'train.py'.
-    Ne fait rien si run.log n'existe pas ou ne contient pas de val_bpb (crash).
+    Extract val_bpb and peak_vram_mb from run.log and append a row to results.tsv.
+    Called automatically after any command containing 'train.py'.
+    Does nothing if run.log does not exist or contains no val_bpb (crash).
     """
     try:
         log_path = Path("run.log")
@@ -104,7 +104,7 @@ def _auto_log_from_run_log():
 
         log_text = log_path.read_text(encoding="utf-8", errors="replace")
 
-        # Extraire val_bpb
+        # Extract val_bpb
         val_bpb = None
         for line in log_text.splitlines():
             if line.startswith("val_bpb:"):
@@ -114,12 +114,12 @@ def _auto_log_from_run_log():
                     pass
 
         if val_bpb is None:
-            # Training a crashé — logger comme crash
+            # Training crashed — log as crash
             _append_tsv_row("unknown", 0.0, 0.0, "crash", "training crashed — no val_bpb in log")
             print("  [auto-log] Training crashed — logged as crash")
             return
 
-        # Extraire peak_vram_mb
+        # Extract peak_vram_mb
         memory_gb = 0.0
         for line in log_text.splitlines():
             if line.startswith("peak_vram_mb:"):
@@ -128,14 +128,14 @@ def _auto_log_from_run_log():
                 except ValueError:
                     pass
 
-        # Obtenir le hash git court
+        # Get the short git hash
         git_result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True,
         )
         commit = git_result.stdout.strip() if git_result.returncode == 0 else "unknown"
 
-        # Lire les résultats déjà loggés pour déterminer keep/discard
+        # Read already-logged results to determine keep/discard
         tsv_path = Path("results.tsv")
         prev_best = None
         if tsv_path.exists():
@@ -158,7 +158,7 @@ def _auto_log_from_run_log():
 
 
 def _append_tsv_row(commit, val_bpb, memory_gb, status, description):
-    """Appende une ligne à results.tsv (crée le header si le fichier est vide)."""
+    """Append a row to results.tsv (creates the header if the file is empty)."""
     tsv_path = Path("results.tsv")
     if not tsv_path.exists() or tsv_path.stat().st_size == 0:
         tsv_path.write_text("commit\tval_bpb\tmemory_gb\tstatus\tdescription\n", encoding="utf-8")
@@ -167,13 +167,13 @@ def _append_tsv_row(commit, val_bpb, memory_gb, status, description):
 
 
 # ---------------------------------------------------------------------------
-# Exécution des outils
+# Tool execution
 # ---------------------------------------------------------------------------
 
 def execute_tool(name, input_data):
     """
-    Exécute un outil demandé par Claude et retourne le résultat comme string.
-    Capture toutes les erreurs — ne laisse jamais planter la boucle principale.
+    Execute a tool requested by the inner agent and return the result as a string.
+    Catches all errors — never lets exceptions crash the main loop.
     """
     try:
         if name == "read_file":
@@ -196,7 +196,7 @@ def execute_tool(name, input_data):
             print(f"    [cmd] $ {command}")
             result = subprocess.run(
                 command,
-                shell=True,       # Nécessaire pour les redirections (> run.log 2>&1)
+                shell=True,       # Required for redirections (> run.log 2>&1)
                 capture_output=True,
                 text=True,
                 timeout=COMMAND_TIMEOUT,
@@ -207,8 +207,8 @@ def execute_tool(name, input_data):
             if len(output) > MAX_OUTPUT_CHARS:
                 output = output[:MAX_OUTPUT_CHARS] + "\n... (truncated)"
 
-            # Auto-log: si c'était un run d'entraînement, extraire et logger les résultats
-            # immédiatement — sans dépendre du modèle pour appeler log_result.
+            # Auto-log: if this was a training run, extract and log results
+            # immediately — without relying on the model to call any logging tool.
             if "train.py" in command and "grep" not in command:
                 _auto_log_from_run_log()
 
@@ -224,21 +224,21 @@ def execute_tool(name, input_data):
 
 
 # ---------------------------------------------------------------------------
-# Boucle tool use principale
+# Main tool-use loop
 # ---------------------------------------------------------------------------
 
 def run_inner_agent(client, program_content, n_experiments):
     """
-    Lance l'agent inner avec le program.md donné.
-    Tourne jusqu'à n_experiments expériences ou jusqu'à finish_reason == "stop".
+    Run the inner agent with the given program.md.
+    Loops until n_experiments are done or finish_reason == "stop".
 
-    Arguments :
-        client          (openai.OpenAI) : client Ollama partagé avec MetaAgent
-        program_content (str)           : contenu du program.md à utiliser
-        n_experiments   (int)           : nombre d'expériences à effectuer
+    Args:
+        client          (openai.OpenAI) : Ollama client shared with MetaAgent
+        program_content (str)           : program.md content to use
+        n_experiments   (int)           : number of experiments to run
 
-    Retourne :
-        experiments (list[dict]) : liste des expériences parsées depuis results.tsv
+    Returns:
+        experiments (list[dict]): list of experiments parsed from results.tsv
     """
     train_py = Path("train.py").read_text(encoding="utf-8")
 
@@ -286,12 +286,12 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
         finish_reason = response.choices[0].finish_reason
         print(f"stop={finish_reason}")
 
-        # Affiche un extrait du texte de réflexion de l'agent
+        # Print a preview of the agent's reasoning
         if msg.content:
             preview = msg.content.strip()[:150].replace("\n", " ")
             print(f"    [agent] {preview}...")
 
-        # Sérialise le message assistant pour l'historique
+        # Serialize assistant message for the conversation history
         assistant_msg = {"role": "assistant", "content": msg.content or ""}
         if msg.tool_calls:
             assistant_msg["tool_calls"] = [
@@ -309,7 +309,7 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
             break
 
         if finish_reason == "length":
-            # Réponse tronquée — continuer
+            # Response was truncated — recover and continue
             print("  [inner_agent] Warning: max_tokens hit — recovering...")
             if msg.tool_calls:
                 for tc in msg.tool_calls:
@@ -346,17 +346,17 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
 
 
 # ---------------------------------------------------------------------------
-# Parsing des résultats
+# Results parsing
 # ---------------------------------------------------------------------------
 
 def _parse_results_tsv():
     """
-    Parse results.tsv écrit par l'agent inner pendant les expériences.
+    Parse results.tsv written by auto-log after each training run.
 
-    Format attendu (tab-separated) :
+    Expected format (tab-separated):
         commit  val_bpb  memory_gb  status  description
 
-    Retourne une liste de dicts d'expériences compatibles avec logger.save_results().
+    Returns a list of experiment dicts compatible with logger.save_results().
     """
     tsv_path = Path("results.tsv")
     if not tsv_path.exists():
@@ -366,7 +366,7 @@ def _parse_results_tsv():
     experiments = []
     lines = tsv_path.read_text(encoding="utf-8").strip().split("\n")
 
-    for i, line in enumerate(lines[1:], 1):  # lines[0] est le header
+    for i, line in enumerate(lines[1:], 1):  # lines[0] is the header
         parts = line.split("\t")
         if len(parts) < 5:
             continue
@@ -377,7 +377,7 @@ def _parse_results_tsv():
                 "commit":           commit.strip(),
                 "val_bpb":          float(val_bpb_str.strip()),
                 "memory_gb":        float(memory_gb_str.strip()),
-                "training_seconds": 300.0,   # Durée fixe (TIME_BUDGET dans prepare.py)
+                "training_seconds": 300.0,   # Fixed duration (TIME_BUDGET in prepare.py)
                 "status":           status.strip(),
                 "description":      description.strip(),
                 "timestamp_start":  datetime.now().isoformat(timespec="seconds"),

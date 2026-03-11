@@ -1,11 +1,11 @@
 """
-logger.py — Système de logging et d'historique pour meta-autoresearch.
+logger.py — Logging and history system for meta-autoresearch.
 
-Responsabilités :
-- Sauvegarder chaque version de program.md testée
-- Enregistrer les résultats de chaque batch d'expériences
-- Enregistrer les analyses du meta-agent
-- Fournir l'historique complet pour que le meta-agent puisse apprendre
+Responsibilities:
+- Save each version of program.md that was tested
+- Record the results of each experiment batch
+- Record meta-agent analyses
+- Provide the full history so the meta-agent can learn from past runs
 """
 
 import json
@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Chemins des dossiers d'historique (relatifs à la racine du projet)
+# History directory paths (relative to project root)
 # ---------------------------------------------------------------------------
 
 HISTORY_DIR  = Path("history")
@@ -23,15 +23,15 @@ ANALYSIS_DIR = HISTORY_DIR / "analysis"
 
 
 # ---------------------------------------------------------------------------
-# Utilitaires internes
+# Internal utilities
 # ---------------------------------------------------------------------------
 
 def get_next_ids():
     """
-    Calcule le prochain batch_id et program_version disponibles.
-    Regarde les fichiers existants et retourne les prochains numéros.
+    Compute the next available batch_id and program_version.
+    Looks at existing files and returns the next sequence numbers.
 
-    Retourne : (next_batch_id, next_program_version)
+    Returns: (next_batch_id, next_program_version)
     """
     existing_batches = list(RESULTS_DIR.glob("batch_*.json"))
     next_batch_id = len(existing_batches) + 1
@@ -43,18 +43,18 @@ def get_next_ids():
 
 
 # ---------------------------------------------------------------------------
-# Fonctions de sauvegarde
+# Save functions
 # ---------------------------------------------------------------------------
 
 def save_program(content):
     """
-    Sauvegarde une version de program.md dans history/programs/.
+    Save a version of program.md to history/programs/.
 
-    Arguments :
-        content (str) : le contenu complet du program.md généré
+    Args:
+        content (str): full content of the generated program.md
 
-    Retourne :
-        version (int) : le numéro de version assigné (ex: 1, 2, 3...)
+    Returns:
+        version (int): assigned version number (e.g. 1, 2, 3...)
     """
     _, version = get_next_ids()
     filename = PROGRAMS_DIR / f"program_v{version:03d}.md"
@@ -65,24 +65,24 @@ def save_program(content):
 
 def save_results(batch_id, program_version, experiments):
     """
-    Sauvegarde les résultats d'un batch d'expériences dans history/results/.
+    Save the results of an experiment batch to history/results/.
 
-    Arguments :
-        batch_id         (int)  : identifiant du batch (ex: 1, 2, 3...)
-        program_version  (int)  : version de program.md utilisée pour ce batch
-        experiments      (list) : liste de dicts, un par expérience.
-            Chaque dict contient :
-                experiment_id    (int)   : numéro de l'expérience dans le batch
-                commit           (str)   : hash git court (7 chars)
-                val_bpb          (float) : bits per byte obtenu (0.0 si crash)
-                memory_gb        (float) : VRAM utilisée en GB (0.0 si crash)
-                training_seconds (float) : durée réelle d'entraînement
-                status           (str)   : "keep", "discard", ou "crash"
-                description      (str)   : description courte de l'idée testée
-                timestamp_start  (str)   : heure de début (isoformat)
+    Args:
+        batch_id         (int)  : batch identifier (e.g. 1, 2, 3...)
+        program_version  (int)  : program.md version used for this batch
+        experiments      (list) : list of dicts, one per experiment.
+            Each dict contains:
+                experiment_id    (int)   : experiment number within the batch
+                commit           (str)   : short git hash (7 chars)
+                val_bpb          (float) : bits per byte achieved (0.0 if crash)
+                memory_gb        (float) : VRAM used in GB (0.0 if crash)
+                training_seconds (float) : actual training duration
+                status           (str)   : "keep", "discard", or "crash"
+                description      (str)   : short description of the idea tested
+                timestamp_start  (str)   : start time (isoformat)
 
-    Retourne :
-        filename (Path) : chemin du fichier JSON créé
+    Returns:
+        filename (Path): path to the created JSON file
     """
     valid   = [e for e in experiments if e["status"] != "crash"]
     crashed = [e for e in experiments if e["status"] == "crash"]
@@ -119,20 +119,19 @@ def save_results(batch_id, program_version, experiments):
 
 def save_analysis(batch_id, analysis_data):
     """
-    Sauvegarde l'analyse du meta-agent après un batch dans history/analysis/.
+    Save the meta-agent analysis after a batch to history/analysis/.
 
-    Arguments :
-        batch_id       (int)  : identifiant du batch analysé
-        analysis_data  (dict) : résultat de l'analyse du meta-agent.
-            Clés attendues :
-                observations        (str)  : résumé de ce qui a été observé
-                successful_patterns (list) : idées qui ont bien marché
-                failed_patterns     (list) : idées qui n'ont pas marché
-                next_directions     (list) : directions à explorer au prochain batch
-                program_version_next (int) : version du prochain program.md
+    Args:
+        batch_id       (int)  : identifier of the analyzed batch
+        analysis_data  (dict) : meta-agent analysis result.
+            Expected keys:
+                observations        (str)  : summary of what was observed
+                successful_patterns (list) : ideas that worked well
+                failed_patterns     (list) : ideas that did not work
+                next_directions     (list) : directions to explore in the next batch
 
-    Retourne :
-        filename (Path) : chemin du fichier JSON créé
+    Returns:
+        filename (Path): path to the created JSON file
     """
     data = {
         "batch_id": batch_id,
@@ -149,20 +148,20 @@ def save_analysis(batch_id, analysis_data):
 
 
 # ---------------------------------------------------------------------------
-# Fonction de lecture
+# Load function
 # ---------------------------------------------------------------------------
 
 def load_history():
     """
-    Charge l'historique complet : tous les résultats, analyses et programs.
-    Utilisé par le meta-agent pour analyser ce qui a été fait.
+    Load the full history: all results, analyses, and programs.
+    Used by the meta-agent to understand what has been tried before.
 
-    Retourne un dict avec :
-        results               (list) : tous les batch results (triés par batch_id)
-        analyses              (list) : toutes les analyses (triées par batch_id)
-        programs              (list) : tous les programs (triés par version)
-        num_batches           (int)  : nombre total de batches effectués
-        best_val_bpb_overall  (float|None) : meilleur val_bpb sur tous les batches
+    Returns a dict with:
+        results               (list)       : all batch results (sorted by batch_id)
+        analyses              (list)       : all analyses (sorted by batch_id)
+        programs              (list)       : all programs (sorted by version)
+        num_batches           (int)        : total number of batches completed
+        best_val_bpb_overall  (float|None) : best val_bpb across all batches
     """
     results = []
     for path in sorted(RESULTS_DIR.glob("batch_*.json")):
