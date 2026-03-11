@@ -31,6 +31,33 @@ app = Flask(__name__, static_folder=str(Path(__file__).parent))
 
 DASHBOARD_DIR = Path(__file__).parent
 STATE_FILE    = ROOT / "state.json"
+RESULTS_TSV   = ROOT / "results.tsv"
+
+
+def _read_live_experiments():
+    """Lit results.tsv (batch en cours) et retourne une liste d'expériences live."""
+    if not RESULTS_TSV.exists():
+        return []
+    experiments = []
+    try:
+        lines = RESULTS_TSV.read_text(encoding="utf-8").splitlines()
+        for line in lines[1:]:  # skip header
+            parts = line.strip().split("\t")
+            if len(parts) < 5:
+                continue
+            try:
+                experiments.append({
+                    "commit":      parts[0],
+                    "val_bpb":     float(parts[1]),
+                    "memory_gb":   float(parts[2]),
+                    "status":      parts[3],
+                    "description": parts[4],
+                })
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    return experiments
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +115,8 @@ def api_status():
     except Exception:
         max_batches = 50
 
+    live_experiments = _read_live_experiments()
+
     return jsonify({
         **state,
         "total_experiments": total_experiments,
@@ -95,6 +124,7 @@ def api_status():
         "crash_rate_pct":    crash_rate,
         "max_batches":       max_batches,
         "running":           STATE_FILE.exists(),
+        "live_experiments":  live_experiments,
     })
 
 
