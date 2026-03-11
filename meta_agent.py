@@ -55,7 +55,7 @@ class MetaAgent:
 
     def analyze_results(self, history):
         """
-        Appelle Claude pour analyser l'historique et identifier les patterns.
+        Appelle le meta-agent LLM pour analyser l'historique et identifier les patterns.
 
         Arguments :
             history (dict) : retourné par load_history()
@@ -103,7 +103,7 @@ Return ONLY the JSON object, no markdown, no explanation."""
 
         text = response.choices[0].message.content.strip()
 
-        # Retire les balises ```json ... ``` si Claude les ajoute
+        # Retire les balises ```json ... ``` si le modèle les ajoute
         if text.startswith("```"):
             parts = text.split("```")
             text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
@@ -125,7 +125,7 @@ Return ONLY the JSON object, no markdown, no explanation."""
 
     def generate_program(self, history, analysis):
         """
-        Appelle Claude pour générer un nouveau program.md amélioré.
+        Appelle le meta-agent LLM pour générer un nouveau program.md amélioré.
 
         Arguments :
             history  (dict) : retourné par load_history()
