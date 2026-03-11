@@ -126,6 +126,85 @@ TOOLS = [
 
 
 # ---------------------------------------------------------------------------
+# Auto-logging après chaque training run
+# ---------------------------------------------------------------------------
+
+def _auto_log_from_run_log():
+    """
+    Extrait val_bpb et peak_vram_mb depuis run.log et appende une ligne à results.tsv.
+    Appelé automatiquement après chaque commande contenant 'train.py'.
+    Ne fait rien si run.log n'existe pas ou ne contient pas de val_bpb (crash).
+    """
+    try:
+        log_path = Path("run.log")
+        if not log_path.exists():
+            return
+
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+
+        # Extraire val_bpb
+        val_bpb = None
+        for line in log_text.splitlines():
+            if line.startswith("val_bpb:"):
+                try:
+                    val_bpb = float(line.split(":")[1].strip())
+                except ValueError:
+                    pass
+
+        if val_bpb is None:
+            # Training a crashé — logger comme crash
+            _append_tsv_row("unknown", 0.0, 0.0, "crash", "training crashed — no val_bpb in log")
+            print("  [auto-log] Training crashed — logged as crash")
+            return
+
+        # Extraire peak_vram_mb
+        memory_gb = 0.0
+        for line in log_text.splitlines():
+            if line.startswith("peak_vram_mb:"):
+                try:
+                    memory_gb = round(float(line.split(":")[1].strip()) / 1024, 3)
+                except ValueError:
+                    pass
+
+        # Obtenir le hash git court
+        git_result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True,
+        )
+        commit = git_result.stdout.strip() if git_result.returncode == 0 else "unknown"
+
+        # Lire les résultats déjà loggés pour déterminer keep/discard
+        tsv_path = Path("results.tsv")
+        prev_best = None
+        if tsv_path.exists():
+            for line in tsv_path.read_text(encoding="utf-8").splitlines()[1:]:
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    try:
+                        v = float(parts[1])
+                        if prev_best is None or v < prev_best:
+                            prev_best = v
+                    except ValueError:
+                        pass
+
+        status = "keep" if (prev_best is None or val_bpb < prev_best) else "discard"
+        _append_tsv_row(commit, val_bpb, memory_gb, status, "auto-logged")
+        print(f"  [auto-log] val_bpb={val_bpb} memory_gb={memory_gb} status={status} commit={commit}")
+
+    except Exception as e:
+        print(f"  [auto-log] Warning: could not auto-log result: {e}")
+
+
+def _append_tsv_row(commit, val_bpb, memory_gb, status, description):
+    """Appende une ligne à results.tsv (crée le header si le fichier est vide)."""
+    tsv_path = Path("results.tsv")
+    if not tsv_path.exists() or tsv_path.stat().st_size == 0:
+        tsv_path.write_text("commit\tval_bpb\tmemory_gb\tstatus\tdescription\n", encoding="utf-8")
+    with open(tsv_path, "a", encoding="utf-8") as f:
+        f.write(f"{commit}\t{val_bpb}\t{memory_gb}\t{status}\t{description}\n")
+
+
+# ---------------------------------------------------------------------------
 # Exécution des outils
 # ---------------------------------------------------------------------------
 
@@ -165,6 +244,12 @@ def execute_tool(name, input_data):
                 output = f"(command finished with exit code {result.returncode})"
             if len(output) > MAX_OUTPUT_CHARS:
                 output = output[:MAX_OUTPUT_CHARS] + "\n... (truncated)"
+
+            # Auto-log: si c'était un run d'entraînement, extraire et logger les résultats
+            # immédiatement — sans dépendre du modèle pour appeler log_result.
+            if "train.py" in command and "grep" not in command:
+                _auto_log_from_run_log()
+
             return output
 
         elif name == "log_result":
