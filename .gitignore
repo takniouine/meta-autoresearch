@@ -3,32 +3,34 @@
 # =============================================================================
 
 # Python cache
-# Python crée ces dossiers/fichiers automatiquement quand il exécute du code.
-# Ils sont spécifiques à ta machine et inutiles pour les autres.
+# Created automatically by Python when running code.
+# Machine-specific and useless for other contributors.
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
 # Virtual environment
-# uv crée .venv/ pour isoler les dépendances du projet.
-# Des centaines de MB de binaires — jamais sur GitHub.
+# Created by uv to isolate project dependencies.
+# Hundreds of MB of binaries — never commit to GitHub.
 .venv/
 
 # Secrets
-# Contient ANTHROPIC_API_KEY et toute autre clé sensible.
-# Si ce fichier est pushé, la clé est publique en quelques secondes.
+# Contains API keys and other sensitive credentials.
+# If pushed, a key is public within seconds.
 .env
 
-# Runtime files (générés à l'exécution, changent en permanence)
-# run.log     : sortie complète de chaque entraînement GPU
-# results.tsv : historique des expériences (autoresearch le laisse non-tracké intentionnellement)
-# state.json  : état courant de la boucle meta (pour reprendre après interruption)
+# Runtime files (generated at runtime, change constantly)
+# run.log     : full output of each GPU training run
+# results.tsv : live experiment log for the current batch (reset each batch)
+# state.json  : current loop state (used to resume after interruption)
+# program.md  : current research instructions (regenerated each batch)
 run.log
 results.tsv
 state.json
+program.md
 
-# External reference (repo cloné pour étude, pas notre code)
+# External reference (cloned repo for reference, not our code)
 autoresearch/
 
 # IDE
@@ -38,4 +40,3 @@ autoresearch/
 # OS
 Thumbs.db
 .DS_Store
-program.md
