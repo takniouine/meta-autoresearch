@@ -162,10 +162,20 @@ def run_inner_agent(client, program_content, n_experiments):
 
 IMPORTANT SETUP NOTES:
 - You are already on a dedicated git branch. Do NOT run 'git checkout -b'.
-- results.tsv already has its header row. Append results after each experiment.
 - Run exactly {n_experiments} experiments, then stop. Do not ask for confirmation.
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
 - Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
+
+RESULTS LOGGING — THIS IS MANDATORY:
+After each experiment, append exactly ONE tab-separated line to 'results.tsv' (NOT results.txt, NOT any other file).
+The file already exists with this header: commit<TAB>val_bpb<TAB>memory_gb<TAB>status<TAB>description
+Your line must follow this EXACT format (use actual tab characters, not spaces):
+  <7-char-git-hash><TAB><val_bpb float><TAB><memory_gb float><TAB><keep|discard|crash><TAB><short description>
+Example: abc1234\t1.3648\t2.1\tkeep\tbaseline default architecture
+Use run_command with: echo "abc1234\t1.3648\t2.1\tkeep\tbaseline" >> results.tsv
+To get the git hash: git rev-parse --short HEAD
+To get val_bpb: grep "^val_bpb:" run.log
+To get memory_gb: grep "^peak_vram_mb:" run.log  (divide by 1024)
 
 WINDOWS ENVIRONMENT — train.py is already patched for Windows:
 - FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).
