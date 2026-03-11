@@ -84,9 +84,10 @@ def run(goal, config):
     state = load_state(goal)
     agent = MetaAgent(goal=goal)
 
-    n_exp        = config["n_experiments"]
-    max_batches  = config["max_batches"]
-    threshold    = config["convergence_threshold"]
+    n_exp            = config["n_experiments"]
+    max_batches      = config["max_batches"]
+    threshold        = config["convergence_threshold"]
+    max_crashes      = config.get("max_consecutive_crashes", 3)
 
     print(f"\n[run_meta] Goal: {goal}")
     print(f"[run_meta] {n_exp} experiments/batch — max {max_batches} batches — stop after {threshold} batches without improvement")
@@ -130,6 +131,8 @@ def run(goal, config):
 
         # 7. Mettre à jour l'état et vérifier la convergence
         if batch_best is not None:
+            # Batch valide : reset du compteur de crashes consécutifs
+            state["consecutive_crashes"] = 0
             if state["best_val_bpb"] is None or batch_best < state["best_val_bpb"]:
                 print(f"[run_meta] New best val_bpb: {batch_best:.6f}  (was {state['best_val_bpb']})")
                 state["best_val_bpb"]         = batch_best
@@ -138,15 +141,22 @@ def run(goal, config):
                 state["no_improvement_count"] += 1
                 print(f"[run_meta] No improvement {state['no_improvement_count']}/{threshold}  (best: {state['best_val_bpb']:.6f})")
         else:
-            state["no_improvement_count"] += 1
-            print(f"[run_meta] All experiments crashed — no_improvement_count={state['no_improvement_count']}")
+            # Batch entièrement crashé : ne compte PAS comme un plateau —
+            # le programme est peut-être mauvais, pas le modèle convergé
+            state["consecutive_crashes"] = state.get("consecutive_crashes", 0) + 1
+            print(f"[run_meta] All experiments crashed ({state['consecutive_crashes']} consecutive crash batch(es))")
 
         state["batches_done"] = batch_num
         save_state(state)
 
-        # Convergence : arrêt anticipé
+        # Arrêt sur convergence réelle (plateau avec expériences valides)
         if state["no_improvement_count"] >= threshold:
             print(f"\n[run_meta] Convergence detected — {threshold} batches without improvement.")
+            break
+
+        # Arrêt sur trop de crashes consécutifs (program.md inutilisable)
+        if state.get("consecutive_crashes", 0) >= max_crashes:
+            print(f"\n[run_meta] Stopping — {max_crashes} consecutive crash batches. Check program.md quality.")
             break
 
     # -----------------------------------------------------------------------
