@@ -242,6 +242,15 @@ def run_inner_agent(client, program_content, n_experiments):
     """
     train_py = Path("train.py").read_text(encoding="utf-8")
 
+    from pathlib import Path as _Path
+    is_evolved = _Path("history/best_train.py").exists()
+    evolution_note = (
+        "IMPORTANT: train.py already contains the BEST configuration found across all previous batches. "
+        "Build on top of it — do not reset it to defaults. Your first experiment should run it as-is to confirm the baseline, then improve from there."
+        if is_evolved else
+        "This is the first batch — train.py is the original baseline."
+    )
+
     initial_message = f"""You are an autonomous LLM research agent. Your goal is to minimize val_bpb.
 
 IMPORTANT SETUP NOTES:
@@ -249,6 +258,7 @@ IMPORTANT SETUP NOTES:
 - Run exactly {n_experiments} experiments, then stop. Do not ask for confirmation.
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
 - Results are logged automatically after each training run — do NOT try to write to results.tsv yourself.
+- {evolution_note}
 
 WINDOWS ENVIRONMENT — train.py is already patched for Windows:
 - FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).

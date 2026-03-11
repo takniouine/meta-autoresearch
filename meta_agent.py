@@ -10,6 +10,7 @@ MetaAgent manages the high-level research loop:
 """
 
 import json
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,9 @@ MODEL = "qwen2.5:7b"
 # Falls back to empty string if not available locally
 _autoresearch_program = Path("autoresearch/program.md")
 BASE_PROGRAM = _autoresearch_program.read_text(encoding="utf-8") if _autoresearch_program.exists() else ""
+
+# Path where we persist the best train.py found across all batches
+BEST_TRAIN_PY = Path("history") / "best_train.py"
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +213,39 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
         return round(best_val_bpb * 0.7 + crash_rate * 0.3, 6)
 
     # -----------------------------------------------------------------------
+    # _save_best_train_py — persist the best train.py for cumulative evolution
+    # -----------------------------------------------------------------------
+
+    def _save_best_train_py(self, experiments):
+        """
+        After a batch, extract train.py from the best experiment's git commit
+        and save it to history/best_train.py.
+
+        This enables cumulative evolution: each batch starts from the best
+        configuration found so far rather than always resetting to the original.
+        Inspired by AlphaEvolve (DeepMind, 2025).
+        """
+        valid = [
+            e for e in experiments
+            if e["status"] != "crash" and e.get("commit", "unknown") != "unknown"
+        ]
+        if not valid:
+            return
+
+        best_exp = min(valid, key=lambda e: e["val_bpb"])
+        commit   = best_exp["commit"]
+
+        result = subprocess.run(
+            ["git", "show", f"{commit}:train.py"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            BEST_TRAIN_PY.write_text(result.stdout, encoding="utf-8")
+            print(f"[MetaAgent] Saved best train.py → history/best_train.py  (val_bpb={best_exp['val_bpb']:.6f}, commit={commit})")
+        else:
+            print(f"[MetaAgent] Warning: could not extract train.py from commit {commit}")
+
+    # -----------------------------------------------------------------------
     # run_batch — launch N experiments with a given program.md
     # -----------------------------------------------------------------------
 
@@ -247,6 +284,13 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         print(f"\n[MetaAgent] ═══ Batch {batch_id} — program v{program_version:03d} ═══")
 
+        # Cumulative evolution: apply the best train.py found so far as starting point
+        if BEST_TRAIN_PY.exists():
+            shutil.copy(BEST_TRAIN_PY, "train.py")
+            print(f"[MetaAgent] Applied best train.py from history — cumulative evolution active")
+        else:
+            print(f"[MetaAgent] No previous best train.py — starting from baseline")
+
         # Record the current branch to return to after the batch
         current_branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -284,6 +328,9 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         # Save results to history/
         save_results(batch_id, program_version, experiments)
+
+        # Cumulative evolution: persist the best train.py for the next batch
+        self._save_best_train_py(experiments)
 
         score = self.evaluate_program({"summary": {
             "best_val_bpb": min((e["val_bpb"] for e in experiments if e["status"] != "crash"), default=None),
