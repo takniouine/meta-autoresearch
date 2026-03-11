@@ -131,7 +131,7 @@ def _auto_log_from_run_log():
         # Get the short git hash
         git_result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         commit = git_result.stdout.strip() if git_result.returncode == 0 else "unknown"
 
@@ -199,6 +199,8 @@ def execute_tool(name, input_data):
                 shell=True,       # Required for redirections (> run.log 2>&1)
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=COMMAND_TIMEOUT,
             )
             output = (result.stdout + result.stderr).strip()

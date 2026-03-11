@@ -237,7 +237,7 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
 
         result = subprocess.run(
             ["git", "show", f"{commit}:train.py"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         if result.returncode == 0:
             BEST_TRAIN_PY.write_text(result.stdout, encoding="utf-8")
@@ -294,7 +294,7 @@ Return ONLY the program.md content, starting with '# autoresearch'. No other tex
         # Record the current branch to return to after the batch
         current_branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", check=True,
         ).stdout.strip()
 
         # Create a dedicated branch for this batch (mirrors autoresearch convention)
