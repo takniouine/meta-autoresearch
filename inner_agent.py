@@ -83,44 +83,6 @@ TOOLS = [
                 "required": ["command"]
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "log_result",
-            "description": (
-                "Log one experiment result to results.tsv. "
-                "ALWAYS call this after each training run instead of using echo or write_file. "
-                "Handles all formatting automatically."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "commit": {
-                        "type": "string",
-                        "description": "7-character git hash from 'git rev-parse --short HEAD'"
-                    },
-                    "val_bpb": {
-                        "type": "number",
-                        "description": "Validation bits-per-byte from run.log (e.g. 1.3597)"
-                    },
-                    "memory_gb": {
-                        "type": "number",
-                        "description": "Peak VRAM in GB (peak_vram_mb from run.log divided by 1024)"
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["keep", "discard", "crash"],
-                        "description": "'keep' if val_bpb improved over baseline, 'discard' otherwise, 'crash' if training failed"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Short description of what was changed (e.g. 'baseline', 'lr=1e-3', 'n_layer=12')"
-                    }
-                },
-                "required": ["commit", "val_bpb", "memory_gb", "status", "description"]
-            }
-        }
     }
 ]
 
@@ -252,18 +214,6 @@ def execute_tool(name, input_data):
 
             return output
 
-        elif name == "log_result":
-            commit      = str(input_data["commit"]).strip()
-            val_bpb     = float(input_data["val_bpb"])
-            memory_gb   = float(input_data["memory_gb"])
-            status      = str(input_data["status"]).strip()
-            description = str(input_data["description"]).strip()
-
-            line = f"{commit}\t{val_bpb}\t{memory_gb}\t{status}\t{description}\n"
-            with open("results.tsv", "a", encoding="utf-8") as f:
-                f.write(line)
-            return f"OK: logged experiment — commit={commit} val_bpb={val_bpb} status={status}"
-
         else:
             return f"Error: unknown tool '{name}'"
 
@@ -298,16 +248,7 @@ IMPORTANT SETUP NOTES:
 - You are already on a dedicated git branch. Do NOT run 'git checkout -b'.
 - Run exactly {n_experiments} experiments, then stop. Do not ask for confirmation.
 - Use 'uv run train.py > run.log 2>&1' to run training (5 minutes).
-- Use 'grep "^val_bpb:\\|^peak_vram_mb:" run.log' to extract results.
-
-RESULTS LOGGING — THIS IS MANDATORY:
-After each training run, call the log_result tool. Do NOT use echo or write_file for this.
-Steps:
-1. run_command("git rev-parse --short HEAD")  → get commit hash
-2. run_command("grep \"^val_bpb:\" run.log")  → get val_bpb value
-3. run_command("grep \"^peak_vram_mb:\" run.log")  → get memory (divide by 1024 for GB)
-4. log_result(commit=..., val_bpb=..., memory_gb=..., status="keep"|"discard"|"crash", description=...)
-If training crashed or run.log has no val_bpb line, use val_bpb=0.0, memory_gb=0.0, status="crash".
+- Results are logged automatically after each training run — do NOT try to write to results.tsv yourself.
 
 WINDOWS ENVIRONMENT — train.py is already patched for Windows:
 - FA3/kernels replaced with F.scaled_dot_product_attention (already done, do NOT re-patch).
