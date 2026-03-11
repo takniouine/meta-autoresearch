@@ -599,7 +599,8 @@
     if (!combined.length) return;
 
     const recent  = combined.slice(-15).reverse();
-    const bestBpb = Math.min(...combined.filter(e => e.status !== "crash").map(e => e.val_bpb));
+    const validBpb = combined.filter(e => e.status !== "crash").map(e => e.val_bpb);
+    const bestBpb  = validBpb.length ? Math.min(...validBpb) : null;
 
     const html = `
       <table>
@@ -610,7 +611,7 @@
         </thead>
         <tbody>
           ${recent.map(e => {
-            const isBest = e.val_bpb === bestBpb && e.status !== "crash";
+            const isBest = bestBpb !== null && e.val_bpb === bestBpb && e.status !== "crash";
             const bpb    = e.status === "crash" ? "—" : e.val_bpb.toFixed(6);
             const badge  = isBest
               ? `<span class="badge badge-best">★ best</span>`
@@ -635,11 +636,12 @@
   function renderPrograms(programs) {
     if (!programs.length) return;
 
-    const bestScore = Math.min(...programs.filter(p => p.score != null).map(p => p.score));
+    const validScores = programs.filter(p => p.score != null).map(p => p.score);
+    const bestScore   = validScores.length ? Math.min(...validScores) : null;
     const sorted    = [...programs].sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
 
     const html = sorted.map(p => {
-      const isBest = p.score === bestScore && p.score != null;
+      const isBest = bestScore !== null && p.score === bestScore;
       return `
         <div class="program-item">
           <div class="program-header">

@@ -28,7 +28,12 @@ from meta_agent import MetaAgent
 
 def load_config():
     """Read config.yaml and return a dict."""
-    with open("config.yaml", encoding="utf-8") as f:
+    path = Path("config.yaml")
+    if not path.exists():
+        raise FileNotFoundError(
+            "config.yaml not found — make sure you run from the project root directory."
+        )
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -41,7 +46,11 @@ def load_state(goal):
     """
     path = Path("state.json")
     if path.exists():
-        state = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[run_meta] Warning: could not read state.json ({e}) — starting fresh")
+            state = {}
         if state.get("goal") == goal:
             print(f"[run_meta] Resuming from batch {state['batches_done'] + 1}")
             print(f"[run_meta] Best val_bpb so far: {state['best_val_bpb']}")
@@ -83,11 +92,15 @@ def run(goal, config):
       6. Check for convergence
     """
     state = load_state(goal)
-    agent = MetaAgent(goal=goal)
+    agent = MetaAgent(
+        goal=goal,
+        model=config.get("model", "qwen2.5:7b"),
+        ollama_base_url=config.get("ollama_base_url", "http://localhost:11434/v1"),
+    )
 
-    n_exp            = config["n_experiments"]
-    max_batches      = config["max_batches"]
-    threshold        = config["convergence_threshold"]
+    n_exp            = config.get("n_experiments", 5)
+    max_batches      = config.get("max_batches", 50)
+    threshold        = config.get("convergence_threshold", 3)
     max_crashes      = config.get("max_consecutive_crashes", 3)
 
     print(f"\n[run_meta] Goal: {goal}")
