@@ -307,7 +307,7 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
             # failed_generation so we can parse and execute it ourselves.
             body = e.response.json() if hasattr(e, "response") else {}
             failed = body.get("error", {}).get("failed_generation", "")
-            match  = re.search(r"<function=(\w+)\s+(\{.*?\})\s*</function>", failed, re.DOTALL)
+            match  = re.search(r"<function=(\w+)[(\s]+(\{.*?\})\)?\s*</function>", failed, re.DOTALL)
             if not match:
                 raise  # unknown error — re-raise
             tool_name = match.group(1)
