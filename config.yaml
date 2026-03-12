@@ -16,8 +16,17 @@ convergence_threshold: 3
 # Stop if N consecutive batches produce no valid experiments (all crashed)
 max_consecutive_crashes: 3
 
-# Model used for both the meta-agent and inner agent (via Ollama)
-model: "qwen2.5-coder:7b"
+# Model used for both the meta-agent and inner agent
+# Ollama examples : "qwen2.5:7b", "qwen2.5-coder:7b"
+# Groq examples   : "llama-3.3-70b-versatile", "llama-3.1-70b-versatile"
+model: "llama-3.3-70b-versatile"
 
-# Ollama API base URL (change if Ollama runs on a different host/port)
-ollama_base_url: "http://localhost:11434/v1"
+# API base URL
+# Ollama (local) : "http://localhost:11434/v1"
+# Groq (cloud)   : "https://api.groq.com/openai/v1"
+api_base_url: "https://api.groq.com/openai/v1"
+
+# API key env variable name — value must be set in .env
+# Ollama : "OLLAMA_API_KEY"  (any dummy value works)
+# Groq   : "GROQ_API_KEY"
+api_key_env: "GROQ_API_KEY"
