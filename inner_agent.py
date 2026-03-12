@@ -10,9 +10,12 @@ This agent receives program.md as instructions and:
 """
 
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
+
+import openai
 
 MAX_TOKENS = 8096
 COMMAND_TIMEOUT = 720     # 12 minutes max per command (5 min training + large buffer)
@@ -286,16 +289,42 @@ Begin now. Your first experiment should establish the baseline (run train.py as-
         iteration += 1
         print(f"  [inner_agent] API call #{iteration}...", end=" ", flush=True)
 
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            tools=TOOLS,
-            messages=messages,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                max_tokens=MAX_TOKENS,
+                tools=TOOLS,
+                messages=messages,
+            )
+            msg           = response.choices[0].message
+            finish_reason = response.choices[0].finish_reason
+            print(f"stop={finish_reason}")
 
-        msg = response.choices[0].message
-        finish_reason = response.choices[0].finish_reason
-        print(f"stop={finish_reason}")
+        except openai.BadRequestError as e:
+            # Llama on Groq sometimes emits tool calls in its native format
+            # <function=name {"arg": "val"}> instead of the OpenAI format.
+            # Groq rejects it with 400 tool_use_failed but includes the
+            # failed_generation so we can parse and execute it ourselves.
+            body = e.response.json() if hasattr(e, "response") else {}
+            failed = body.get("error", {}).get("failed_generation", "")
+            match  = re.search(r"<function=(\w+)\s+(\{.*?\})\s*</function>", failed, re.DOTALL)
+            if not match:
+                raise  # unknown error — re-raise
+            tool_name = match.group(1)
+            try:
+                input_data = json.loads(match.group(2))
+            except json.JSONDecodeError:
+                raise
+            fake_id = f"fallback_{iteration}"
+            print(f"stop=tool_calls (fallback from native Llama format)")
+            print(f"    [tool] {tool_name}({list(input_data.keys())}) [fallback]")
+            result = execute_tool(tool_name, input_data)
+            messages.append({"role": "assistant", "content": "", "tool_calls": [
+                {"id": fake_id, "type": "function",
+                 "function": {"name": tool_name, "arguments": json.dumps(input_data)}}
+            ]})
+            messages.append({"role": "tool", "tool_call_id": fake_id, "content": result})
+            continue
 
         # Print a preview of the agent's reasoning
         if msg.content:
