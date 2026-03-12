@@ -17,7 +17,7 @@ convergence_threshold: 3
 max_consecutive_crashes: 3
 
 # Model used for both the meta-agent and inner agent (via Ollama)
-model: "qwen2.5:7b"
+model: "qwen2.5-coder:7b"
 
 # Ollama API base URL (change if Ollama runs on a different host/port)
 ollama_base_url: "http://localhost:11434/v1"
