@@ -95,7 +95,8 @@ def run(goal, config):
     agent = MetaAgent(
         goal=goal,
         model=config.get("model", "qwen2.5:7b"),
-        ollama_base_url=config.get("ollama_base_url", "http://localhost:11434/v1"),
+        api_base_url=config.get("api_base_url", "http://localhost:11434/v1"),
+        api_key_env=config.get("api_key_env", "OLLAMA_API_KEY"),
     )
 
     n_exp            = config.get("n_experiments", 5)

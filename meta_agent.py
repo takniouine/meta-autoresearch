@@ -10,12 +10,16 @@ MetaAgent manages the high-level research loop:
 """
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 import openai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from logger import save_program, save_results, save_analysis, load_history, get_next_ids
 from inner_agent import run_inner_agent
@@ -41,15 +45,16 @@ class MetaAgent:
     that guide the inner agent, which actually runs training.
     """
 
-    def __init__(self, goal, model="qwen2.5:7b", ollama_base_url="http://localhost:11434/v1"):
+    def __init__(self, goal, model="qwen2.5:7b", api_base_url="http://localhost:11434/v1", api_key_env="OLLAMA_API_KEY"):
         """
         Args:
-            goal           (str): research objective in natural language.
-                                  e.g. "find the best LLM architecture for TinyStories"
-            model          (str): Ollama model name (from config.yaml)
-            ollama_base_url(str): Ollama API base URL (from config.yaml)
+            goal        (str): research objective in natural language.
+            model       (str): model name (from config.yaml)
+            api_base_url(str): OpenAI-compatible API base URL
+            api_key_env (str): name of the env variable holding the API key
         """
-        self.client = openai.OpenAI(base_url=ollama_base_url, api_key="ollama")
+        api_key = os.getenv(api_key_env) or "ollama"
+        self.client = openai.OpenAI(base_url=api_base_url, api_key=api_key)
         self.goal  = goal
         self.model = model
         print(f"[MetaAgent] Initialized. Goal: {self.goal}")
